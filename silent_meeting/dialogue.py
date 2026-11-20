@@ -3,6 +3,7 @@
 from collections import deque
 from pathlib import Path
 import os
+import re
 import tempfile
 import textwrap
 import time
@@ -11,6 +12,16 @@ import uuid
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / ".runtime" / "dialogue.tsv"
 FRESH_SECONDS = 20
 MAX_PAGES = 12
+_GAP = r"[\s_-]+"
+_CUE = "|".join((
+    rf"blank{_GAP}audio", rf"no{_GAP}speech", "silence", "inaudible", "unintelligible",
+    "inhal(?:e[sd]?|ing)", "exhal(?:e[sd]?|ing)", "breath(?:s|ing)?",
+    "sigh(?:s|ed|ing)?", "cough(?:s|ed|ing)?", "sniff(?:s|ed|ing)?",
+    "laugh(?:s|ed|ing|ter)?", "chuckl(?:e[sd]?|ing)", "applause",
+    rf"clears?{_GAP}(?:their{_GAP})?throat", rf"throat{_GAP}clearing",
+    rf"(?:background{_GAP})?(?:music|noise)",
+))
+_SOUND_MARKER = re.compile(rf"\[\s*(?:{_CUE})\s*\]|\(\s*(?:{_CUE})\s*\)", re.IGNORECASE)
 
 
 class Dialogue:
@@ -47,7 +58,12 @@ class Dialogue:
             temporary.unlink(missing_ok=True)
 
     def publish(self, text: str) -> None:
-        clean = " ".join(text.split()).replace("\x00", "")
+        stripped, markers = _SOUND_MARKER.subn(" ", text)
+        if markers:
+            if not any(character.isalnum() for character in stripped):
+                return
+            stripped = re.sub(r"\s+([,.;:!?])", r"\1", stripped)
+        clean = " ".join(stripped.split()).replace("\x00", "")
         now = int(time.time())
         while self.entries and now - self.entries[0][0] >= FRESH_SECONDS:
             self.entries.popleft()

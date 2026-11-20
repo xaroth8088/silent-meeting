@@ -1,13 +1,36 @@
 import Foundation
 
 struct DialogueCards {
+    private static let soundMarker: String = {
+        let gap = #"[\s_-]+"#
+        let cue = [
+            "blank\(gap)audio", "no\(gap)speech", "silence", "inaudible", "unintelligible",
+            "inhal(?:e[sd]?|ing)", "exhal(?:e[sd]?|ing)", "breath(?:s|ing)?",
+            "sigh(?:s|ed|ing)?", "cough(?:s|ed|ing)?", "sniff(?:s|ed|ing)?",
+            "laugh(?:s|ed|ing|ter)?", "chuckl(?:e[sd]?|ing)", "applause",
+            "clears?\(gap)(?:their\(gap))?throat", "throat\(gap)clearing",
+            "(?:background\(gap))?(?:music|noise)",
+        ].joined(separator: "|")
+        return "\\[\\s*(?:\(cue))\\s*\\]|\\(\\s*(?:\(cue))\\s*\\)"
+    }()
+
     private var pages: [String] = []
     private var current: String?
     private var until = DispatchTime(uptimeNanoseconds: 0)
 
     mutating func enqueue(_ text: String) {
+        let stripped = text.replacingOccurrences(of: Self.soundMarker, with: " ",
+                                                 options: [.regularExpression, .caseInsensitive])
+        let dialogue: String
+        if stripped == text {
+            dialogue = text
+        } else {
+            guard stripped.contains(where: { $0.isLetter || $0.isNumber }) else { return }
+            dialogue = stripped.replacingOccurrences(of: #"\s+([,.;:!?])"#, with: "$1",
+                                                     options: .regularExpression)
+        }
         var page = ""
-        for word in text.split(whereSeparator: \.isWhitespace) {
+        for word in dialogue.split(whereSeparator: \.isWhitespace) {
             if !page.isEmpty && page.count + word.count + 1 > 130 {
                 pages.append(page)
                 page = ""

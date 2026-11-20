@@ -75,8 +75,9 @@ enum Intertitle {
         let scale = min(1, 354 / (CGFloat(lines.count) * lineHeight))
         ctx.translateBy(x: canvas.midX, y: canvas.midY)
         ctx.scaleBy(x: scale, y: scale)
+        ctx.textMatrix = .identity
         for (index, line) in lines.enumerated() {
-            let x = CTLineGetPenOffsetForFlush(line, 0.5, 0)
+            let x = -CTLineGetBoundsWithOptions(line, .useGlyphPathBounds).midX
             let y = (CGFloat(lines.count - 1) / 2 - CGFloat(index)) * lineHeight - fontSize * 0.29
             ctx.textPosition = CGPoint(x: x, y: y)
             CTLineDraw(line, ctx)

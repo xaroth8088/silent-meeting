@@ -9,6 +9,21 @@ from silent_meeting.dialogue import Dialogue, FRESH_SECONDS, MAX_PAGES
 
 
 class DialogueTests(TestCase):
+    def test_sound_markers_are_removed_before_pagination(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "dialogue.tsv"
+            dialogue = Dialogue(path)
+            dialogue.publish("[inhales] [BLANK_AUDIO].")
+            self.assertFalse(path.exists())
+            dialogue.publish(
+                "[BLANK_AUDIO] Good morning [inhales], everyone. (laughter) "
+                "[Team Alpha] (the second option)."
+            )
+            self.assertEqual(
+                path.read_text().split("\t", 2)[2],
+                "Good morning, everyone. [Team Alpha] (the second option).\n",
+            )
+
     def test_repeated_text_has_distinct_ids_and_stale_entries_are_removed(self):
         with TemporaryDirectory() as folder:
             path = Path(folder) / "runtime" / "dialogue.tsv"

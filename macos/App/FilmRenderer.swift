@@ -8,30 +8,35 @@ final class FilmRenderer {
     private let colorspace = CGColorSpaceCreateDeviceRGB()
     private let pool = CameraFormat.makePool()
     private let noise = CIFilter(name: "CIRandomGenerator")?.outputImage
-    private var card: (text: String, buffer: CVPixelBuffer)?
+    private var card: (text: String, image: CIImage)?
     private var frame = 0
 
     func render(_ source: CVPixelBuffer, title: String?) -> CVPixelBuffer? {
+        let input: CIImage
         if let title {
-            if card?.text != title {
+            if let card, card.text == title {
+                input = card.image
+            } else {
                 guard let buffer = CameraFormat.allocate(from: pool) else { return nil }
                 Intertitle.draw(title, into: buffer)
-                card = (title, buffer)
+                input = CIImage(cvPixelBuffer: buffer)
+                card = (title, input)
             }
-            return card?.buffer
+        } else {
+            card = nil
+            input = CIImage(cvPixelBuffer: source)
         }
 
-        card = nil
         guard let output = CameraFormat.allocate(from: pool) else { return nil }
         frame = (frame + 1) % 36_000
         let phase = Double(frame)
-        let input = CIImage(cvPixelBuffer: source)
         let scale = max(canvas.width / input.extent.width, canvas.height / input.extent.height) * 1.018
         let translate = CGAffineTransform(translationX: (canvas.width - input.extent.width * scale) / 2 + 3 * sin(phase * 2.1),
                                           y: (canvas.height - input.extent.height * scale) / 2 + 2.4 * sin(phase * 1.31))
         var film = input.transformed(by: CGAffineTransform(scaleX: scale, y: scale).concatenating(translate))
             .cropped(to: canvas)
-            .applyingFilter("CIColorControls", parameters: ["inputSaturation": 0.0, "inputContrast": 1.31])
+            .applyingFilter("CIColorControls", parameters: ["inputSaturation": 0.0,
+                                                           "inputContrast": title == nil ? 1.31 : 1.0])
             .applyingFilter("CIExposureAdjust", parameters: ["inputEV": 0.065 * sin(phase * 1.77)])
             .applyingFilter("CIVignette", parameters: ["inputIntensity": 1.15, "inputRadius": 1.6])
 

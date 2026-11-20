@@ -3,7 +3,7 @@
 [Mac wiki](../AGENTS.md) · [Installer](../Installer/README.md)
 
 - The packaging script can run the native smoke tests without installing a device. Use `SILENT_RUN_TESTS=1` and set `SILENT_TEST_PCM` to a short 16 kHz mono s16le recording of “The meeting is now in session” with at least a second of trailing silence. Use public or locally generated test audio.
-- `Smoke.swift` feeds the real WebRTC VAD and Whisper model, checks pause finalization and card timing, then renders sample frames and checks pixels. `DriverSmoke.c` uses the compiled HAL driver's interface to check device properties and receive actual piano PCM in process.
+- `Smoke.swift` feeds the real WebRTC VAD and Whisper model and checks pause finalization, sound cue removal, and card timing. Its pixel checks include centering both lines of a wrapped card and grain changes across successive frames of the same title. `DriverSmoke.c` uses the compiled HAL driver's interface to check device properties and receive actual piano PCM in process.
 - On a normally secured test Mac, install the signed package, restart, enable the virtual camera, and select both devices in a separate camera/microphone app. Confirm the preview and remote camera show the same card and its expiration. Check that the virtual input contains piano while speech produces cards. Check that no physical audio reaches the virtual mic. Stop capture and confirm the camera goes to standby. Verify device selection when multiple clients use the devices.
 
 ## Verified baseline
