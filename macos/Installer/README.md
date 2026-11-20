@@ -12,13 +12,20 @@ The resulting `.build/macos/Silent-Meeting-0.2.0-unsigned.pkg` is for packaging 
 
 ## Distribution package
 
-Install a **Developer ID Application** certificate and a **Developer ID Installer** certificate from the same Apple Developer team in the build machine's signing keychain. Set up a `notarytool` keychain profile using Apple's instructions. If your team signs under its own registered bundle identifiers, set `SILENT_BUNDLE_ID` to the app identifier and use `<app-bundle-id>.camera` for the extension. If your signing setup requires Developer ID provisioning profiles, set `SILENT_APP_PROFILE` and `SILENT_CAMERA_PROFILE` to their file paths.
+1. Install a **Developer ID Application** certificate and a **Developer ID Installer** certificate from the same Apple Developer team, each with its private key, in the build account's keychain. [Apple Developer ID certificates](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
+2. In **Certificates, Identifiers & Profiles**, register the explicit App ID `io.github.xaroth8088.silent-meeting` with **System Extension** enabled. Create a **Developer ID** distribution provisioning profile for that App ID using the Developer ID Application certificate. Download it and set `SILENT_APP_PROFILE` to its path. If the team uses a different app identifier, set `SILENT_BUNDLE_ID` to match. The camera extension's identifier is always the host's identifier with `.camera` appended. The stock camera extension uses a team-prefixed app group. It needs a separate profile only if the signing configuration adds an entitlement that requires one. The build accepts such a profile through `SILENT_CAMERA_PROFILE`. [Apple guidance on the System Extension entitlement](https://developer.apple.com/forums/thread/811067) · [Team-prefixed app groups](https://developer.apple.com/documentation/xcode/accessing-app-group-containers)
+3. Store the notarization credentials in Keychain as a `notarytool` profile. The command prompts for the app-specific password and checks it before saving the profile. [Apple notarization setup](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool)
+
+```sh
+xcrun notarytool store-credentials silent-meeting --apple-id 'you@example.com' --team-id YOURTEAMID
+```
 
 ```sh
 export SILENT_TEAM_ID=YOURTEAMID
 export SILENT_APP_IDENTITY='Developer ID Application: Your Name (YOURTEAMID)'
 export SILENT_INSTALLER_IDENTITY='Developer ID Installer: Your Name (YOURTEAMID)'
-export SILENT_NOTARY_PROFILE=your-notary-profile
+export SILENT_APP_PROFILE='/absolute/path/to/SilentMeeting.provisionprofile'
+export SILENT_NOTARY_PROFILE=silent-meeting
 macos/build.sh --release
 ```
 

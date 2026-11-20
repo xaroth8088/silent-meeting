@@ -19,6 +19,7 @@ team="${SILENT_TEAM_ID:-UNSIGNED00}"
 app_identity="${SILENT_APP_IDENTITY:-}"
 installer_identity="${SILENT_INSTALLER_IDENTITY:-}"
 profile="${SILENT_NOTARY_PROFILE:-}"
+app_profile="${SILENT_APP_PROFILE:-}"
 if [[ ! "$bundle" =~ ^[A-Za-z0-9][A-Za-z0-9.-]+$ ]]; then
     echo "SILENT_BUNDLE_ID must be a reverse-DNS bundle identifier." >&2
     exit 2
@@ -31,6 +32,10 @@ case "$mode" in
         if [[ ! "$team" =~ ^[A-Z0-9]{10}$ || "$team" == UNSIGNED00 ||
               -z "$app_identity" || -z "$installer_identity" || -z "$profile" ]]; then
             echo "Set SILENT_TEAM_ID, SILENT_APP_IDENTITY, SILENT_INSTALLER_IDENTITY, and SILENT_NOTARY_PROFILE." >&2
+            exit 2
+        fi
+        if [[ ! -f "$app_profile" || ! -r "$app_profile" ]]; then
+            echo "Set SILENT_APP_PROFILE to the host app's Developer ID provisioning profile with System Extension enabled." >&2
             exit 2
         fi
         ;;
@@ -150,7 +155,7 @@ lipo -create "$stage/app-arm64" "$stage/app-x86_64" -output "$app/MacOS/SilentMe
 lipo -create "$stage/camera-arm64" "$stage/camera-x86_64" -output "$camera/MacOS/$ext_id"
 
 if [[ "$mode" == --release ]]; then
-    if [[ -n "${SILENT_APP_PROFILE:-}" ]]; then cp "$SILENT_APP_PROFILE" "$app/embedded.provisionprofile"; fi
+    cp "$app_profile" "$app/embedded.provisionprofile"
     if [[ -n "${SILENT_CAMERA_PROFILE:-}" ]]; then cp "$SILENT_CAMERA_PROFILE" "$camera/embedded.provisionprofile"; fi
     codesign --force --sign "$app_identity" --options runtime --timestamp "$audio/.."
     codesign --force --sign "$app_identity" --options runtime --timestamp --entitlements "$stage/camera.entitlements" "$camera/.."
