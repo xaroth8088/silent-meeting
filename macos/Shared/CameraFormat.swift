@@ -22,7 +22,7 @@ enum CameraFormat {
         return format!
     }()
 
-    static func makePool() -> CVPixelBufferPool {
+    static func makePool(width: Int = width, height: Int = height) -> CVPixelBufferPool {
         let attributes: [String: Any] = [
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height,
@@ -43,11 +43,12 @@ enum CameraFormat {
 
     static var hostTime: CMTime { CMClockGetTime(CMClockGetHostTimeClock()) }
 
-    static func sample(from buffer: CVPixelBuffer, at time: CMTime) -> CMSampleBuffer? {
+    static func sample(from buffer: CVPixelBuffer, at time: CMTime,
+                       format: CMVideoFormatDescription = description) -> CMSampleBuffer? {
         var timing = CMSampleTimingInfo(duration: duration, presentationTimeStamp: time, decodeTimeStamp: .invalid)
         var sample: CMSampleBuffer?
         let status = CMSampleBufferCreateReadyWithImageBuffer(
-            allocator: nil, imageBuffer: buffer, formatDescription: description,
+            allocator: nil, imageBuffer: buffer, formatDescription: format,
             sampleTiming: &timing, sampleBufferOut: &sample
         )
         return status == noErr ? sample : nil

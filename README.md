@@ -1,21 +1,32 @@
 # Silent Meeting
 
-Silent Meeting turns your Mac's webcam into a black-and-white silent film. When you pause, your words become a dialogue card. The meeting hears scratchy ragtime piano through a virtual microphone. The app, virtual devices, piano track, and offline speech model are bundled in one macOS installer.
+Silent Meeting turns your webcam into a black-and-white silent film. When you pause, your words become a dialogue card. Your meeting hears scratchy ragtime piano.
 
-## Use Silent Meeting on Mac
+## Mac launcher
 
-**Release status.** The native build is in this repository. The package needs Apple Developer ID signing and notarization before the virtual camera can be used on a normally configured Mac. There is no signed download yet.
+Open **Silent Meeting.app** on macOS 14 or later. The launcher uses the official OBS camera extension and BlackHole 2ch. It handles the film, local transcription, and piano routing itself.
 
-Once you have the signed `Silent-Meeting.pkg` for macOS 14 or later:
+1. Click **Install OBS** and **Install BlackHole** if the launcher shows them as missing. It downloads and checks the official installers. Follow macOS prompts to install BlackHole and restart if asked. If OBS opens as a disk image, drag it into Applications.
+2. Click **Enable in OBS** if prompted. Approve OBS Virtual Camera in System Settings, then quit OBS. The launcher will use OBS's camera extension directly, so there is no OBS scene or audio mixer to configure. Leave OBS closed while Silent Meeting is running.
+3. Choose your physical camera and speech microphone in Silent Meeting, click **Start**, and grant camera and microphone access. **Start on launch** reuses those choices on later launches. Use **Stop** or close the app to end capture.
+4. In your meeting app, choose **OBS Virtual Camera** for video and **BlackHole 2ch** for the microphone. Leave the meeting's speaker output and macOS sound output on your headphones or speakers. Keep BlackHole dedicated to Silent Meeting during the call.
 
-1. Open the package and restart when Installer requests it. It installs **Silent Meeting** and both virtual devices.
-2. Open **Silent Meeting** from Applications. Click **Enable Virtual Camera** and approve the camera extension in System Settings if prompted. Choose your physical camera and microphone in Silent Meeting, then click **Start** and grant access.
-3. In your meeting or recording app, choose **Silent Meeting Camera** as the camera and **Silent Meeting Piano** as the microphone. For an app that follows the system audio input, choose **Silent Meeting Piano** in **System Settings → Sound → Input**. If an app already had its device list open, reopen it to refresh the list.
+The piano is the only audio Silent Meeting writes to BlackHole. Physical microphone audio stays in memory for offline transcription. The launcher leaves the Mac's default audio devices alone.
 
-Speech recognition runs offline in the app with the included Whisper model. Audio from your physical mic is used for transcription in memory. The virtual mic contains the bundled piano and crackle. It plays whenever a client opens it. When you stop the app, the virtual camera switches to a standby card.
+### Build the app from source
 
-## Build the installer
+On a Mac with Apple Command Line Tools, Python 3.11 or later, and CMake on `PATH`, run:
 
-Run `macos/build.sh --unsigned` on macOS with Apple command-line developer tools, Python 3.11 or later, and CMake available. The build verifies pinned dependency downloads and produces a universal package for Apple Silicon and Intel under `.build/macos/`. The unsigned package is for build verification. For a distributable installer, see [signing and notarization](macos/Installer/README.md).
+```sh
+macos/build.sh --launcher
+open ".build/macos/Silent Meeting.app"
+```
 
-The standalone installer is for macOS. The [OBS extension](obs/README.md) remains available for OBS and other platforms. Source code is [MIT licensed](LICENSE). The [agent wiki](AGENTS.md) and [soundtrack credits](assets/AGENTS.md) are in the repo.
+The build produces a universal app for Intel and Apple Silicon with the piano track and speech model bundled. It uses local ad-hoc signing. The app uses the camera and microphone devices supplied by the upstream releases. [OBS camera approval](https://obsproject.com/kb/virtual-camera-troubleshooting) · [BlackHole](https://existential.audio/blackhole/)
+
+## Other builds
+
+- The [OBS script](obs/README.md) supports users who want to run the effect inside OBS on macOS, Windows, or Linux.
+- The [standalone Mac installer build](macos/Installer/README.md) owns its virtual devices and requires Apple Developer ID signing and notarization.
+
+Source code is [MIT licensed](LICENSE). See the [agent wiki](AGENTS.md) and [soundtrack credits](assets/AGENTS.md).

@@ -18,11 +18,12 @@ def plist(path: Path, **values) -> None:
         plistlib.dump(values, stream)
 
 
-def info(path: Path, identifier: str, executable: str, style: str, name: str, **extra) -> None:
+def info(path: Path, identifier: str, executable: str, style: str, name: str, *,
+         version: str = VERSION, build: str = BUILD, **extra) -> None:
     plist(
         path, CFBundleIdentifier=identifier, CFBundleExecutable=executable,
         CFBundleName=name, CFBundleDisplayName=name, CFBundlePackageType=style,
-        CFBundleShortVersionString=VERSION, CFBundleVersion=BUILD,
+        CFBundleShortVersionString=version, CFBundleVersion=build,
         CFBundleInfoDictionaryVersion="6.0", CFBundleDevelopmentRegion="en",
         LSMinimumSystemVersion="14.0", CFBundleSupportedPlatforms=["MacOSX"], **extra,
     )
@@ -34,9 +35,20 @@ def main() -> None:
     parser.add_argument("team")
     parser.add_argument("bundle")
     parser.add_argument("--unsigned", action="store_true")
+    parser.add_argument("--launcher", action="store_true")
     args = parser.parse_args()
 
     app = args.stage / "Applications/Silent Meeting.app/Contents"
+    capture_permissions = {
+        "LSApplicationCategoryType": "public.app-category.video",
+        "NSCameraUsageDescription": "Silent Meeting uses your camera to make the silent-film video.",
+        "NSMicrophoneUsageDescription": "Silent Meeting uses your microphone to create dialogue cards on this Mac.",
+        "NSHighResolutionCapable": True,
+    }
+    if args.launcher:
+        info(app / "Info.plist", args.bundle, "SilentMeeting", "APPL", "Silent Meeting",
+             version="0.3.0", build="3", **capture_permissions)
+        return
     ext_id = args.bundle + ".camera"
     extension = app / f"Library/SystemExtensions/{ext_id}.systemextension/Contents"
     microphone = args.stage / "Library/Audio/Plug-Ins/HAL/SilentMeetingPiano.driver/Contents"
@@ -44,12 +56,9 @@ def main() -> None:
 
     info(
         app / "Info.plist", args.bundle, "SilentMeeting", "APPL", "Silent Meeting",
-        LSApplicationCategoryType="public.app-category.video",
-        NSCameraUsageDescription="Silent Meeting uses your camera to make the silent-film video.",
-        NSMicrophoneUsageDescription="Silent Meeting uses your microphone to create dialogue cards on this Mac.",
         SilentMeetingCameraExtension=ext_id,
         SilentMeetingSigned=not args.unsigned,
-        NSHighResolutionCapable=True,
+        **capture_permissions,
     )
     info(
         extension / "Info.plist", ext_id, ext_id, "SYSX", "Silent Meeting Camera",

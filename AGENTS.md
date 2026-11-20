@@ -6,6 +6,7 @@ Start here, then read the page in the directory you are changing. The source, th
 
 | Page | Topic |
 | --- | --- |
+| [Mac launcher](macos/Launcher/AGENTS.md) | One-time OBS and BlackHole setup and direct media routing |
 | [Native Mac](macos/AGENTS.md) | Standalone host, virtual camera, piano microphone, and signed packaging |
 | [OBS](obs/AGENTS.md) | Lua filter registration, shader, intertitle rendering, stream and call routing |
 | [Speech](silent_meeting/AGENTS.md) | End-of-utterance behavior, local inference, and the dialogue file contract |
@@ -22,3 +23,4 @@ Read the relevant implementation and upstream sources. Update the nearest page w
 - 2026-11-20 · Verification · Confirmed the Apple Silicon speech and OBS rendering path with generated input. See [verification](tests/AGENTS.md).
 - 2026-11-20 · Architecture · Added the standalone Mac app, Core Media I/O camera extension, and Core Audio piano microphone. Retained OBS as a separate fallback. See the [Mac wiki](macos/AGENTS.md).
 - 2026-11-20 · Signing · Confirmed that the host requires a Developer ID provisioning profile to install the camera extension. See [Mac packaging](macos/Installer/AGENTS.md).
+- 2026-11-20 · Architecture · Added the Mac launcher with the existing signed OBS and BlackHole devices. See [Mac launcher](macos/Launcher/AGENTS.md).

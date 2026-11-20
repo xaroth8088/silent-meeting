@@ -25,6 +25,10 @@ if [[ ! "$bundle" =~ ^[A-Za-z0-9][A-Za-z0-9.-]+$ ]]; then
     exit 2
 fi
 case "$mode" in
+    --launcher)
+        bundle="${SILENT_BUNDLE_ID:-$bundle.launcher}"
+        team=UNSIGNED00
+        ;;
     --unsigned)
         team=UNSIGNED00
         ;;
@@ -40,7 +44,7 @@ case "$mode" in
         fi
         ;;
     *)
-        echo "Usage: macos/build.sh [--unsigned | --release]" >&2
+        echo "Usage: macos/build.sh [--launcher | --unsigned | --release]" >&2
         exit 2
         ;;
 esac
@@ -71,8 +75,12 @@ download() {
     fi
 }
 
-download apple-audio.zip 'https://docs-assets.developer.apple.com/published/430ad6501f6f/CreatingAnAudioServerDriverPlugIn.zip' \
-    860334dfa9e83f2afb749a890ca5a79fc7d3d572d4e116ff9242bec458be4cb0
+if [[ "$mode" != --launcher ]]; then
+    download apple-audio.zip 'https://docs-assets.developer.apple.com/published/430ad6501f6f/CreatingAnAudioServerDriverPlugIn.zip' \
+        860334dfa9e83f2afb749a890ca5a79fc7d3d572d4e116ff9242bec458be4cb0
+    unzip -p "$deps/apple-audio.zip" NullAudio.c > "$stage/NullAudio.c"
+    unzip -p "$deps/apple-audio.zip" LICENSE.txt > "$stage/Apple-NullAudio.txt"
+fi
 download whisper.tar.gz 'https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/v1.9.5' \
     ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720
 download libfvad.tar.gz 'https://codeload.github.com/dpirch/libfvad/tar.gz/refs/tags/v1.0' \
@@ -81,8 +89,6 @@ download ggml-tiny-q5_1.bin 'https://huggingface.co/ggerganov/whisper.cpp/resolv
     818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7
 download openai-whisper-LICENSE 'https://raw.githubusercontent.com/openai/whisper/v20250625/LICENSE' \
     b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d
-unzip -p "$deps/apple-audio.zip" NullAudio.c > "$stage/NullAudio.c"
-unzip -p "$deps/apple-audio.zip" LICENSE.txt > "$stage/Apple-NullAudio.txt"
 tar -xzf "$deps/whisper.tar.gz" -C "$stage"
 tar -xzf "$deps/libfvad.tar.gz" -C "$stage"
 whisper="$stage/whisper.cpp-1.9.5"
@@ -98,9 +104,15 @@ app="$root/Applications/Silent Meeting.app/Contents"
 ext_id="$bundle.camera"
 camera="$app/Library/SystemExtensions/$ext_id.systemextension/Contents"
 audio="$root/Library/Audio/Plug-Ins/HAL/SilentMeetingPiano.driver/Contents"
-mkdir -p "$app/MacOS" "$app/Resources/Licenses" "$camera/MacOS" "$audio/MacOS" "$audio/Resources"
+mkdir -p "$app/MacOS" "$app/Resources/Licenses"
 metadata_args=("$root" "$team" "$bundle")
-if [[ "$mode" == --unsigned ]]; then metadata_args+=(--unsigned); fi
+if [[ "$mode" == --launcher ]]; then
+    metadata_args+=(--launcher)
+    cp assets/maple-leaf-rag.mp3 "$app/Resources/"
+else
+    mkdir -p "$camera/MacOS" "$audio/MacOS" "$audio/Resources"
+    if [[ "$mode" == --unsigned ]]; then metadata_args+=(--unsigned); fi
+fi
 python3 macos/Installer/bundle_metadata.py "${metadata_args[@]}"
 cp "$deps/ggml-tiny-q5_1.bin" "$app/Resources/"
 cp LICENSE "$app/Resources/Licenses/Silent-Meeting.txt"
@@ -109,16 +121,20 @@ cp "$deps/openai-whisper-LICENSE" "$app/Resources/Licenses/Whisper-model.txt"
 cp "$fvad/LICENSE" "$app/Resources/Licenses/libfvad.txt"
 cp "$fvad/PATENTS" "$app/Resources/Licenses/libfvad-PATENTS.txt"
 cp assets/AGENTS.md "$app/Resources/Licenses/Soundtrack.md"
-cp "$stage/Apple-NullAudio.txt" "$audio/Resources/Apple-NullAudio.txt"
-cp assets/AGENTS.md "$audio/Resources/Soundtrack.md"
-
-# The driver uses an uncompressed mono buffer so its real-time callback never decodes audio.
-afconvert -f WAVE -d LEF32@48000 -c 1 assets/maple-leaf-rag.mp3 "$stage/track.wav"
-python3 macos/Installer/wave_to_pcm.py "$stage/track.wav" "$audio/Resources/maple-leaf-rag.f32"
-patch -s -o "$stage/Driver.c" "$stage/NullAudio.c" macos/Microphone/null-audio.patch
-"$clang" -arch arm64 -arch x86_64 "-mmacosx-version-min=$minimum" -isysroot "$sdk" -O2 -fblocks \
-    -bundle -I macos/Microphone -framework CoreFoundation -framework CoreAudio \
-    "$stage/Driver.c" macos/Microphone/Soundtrack.c -o "$audio/MacOS/SilentMeetingPiano"
+if [[ "$mode" == --launcher ]]; then
+    ui=(macos/Launcher/*.swift)
+else
+    ui=(macos/App/SilentMeetingApp.swift)
+    cp "$stage/Apple-NullAudio.txt" "$audio/Resources/Apple-NullAudio.txt"
+    cp assets/AGENTS.md "$audio/Resources/Soundtrack.md"
+    # The driver uses an uncompressed mono buffer so its real-time callback never decodes audio.
+    afconvert -f WAVE -d LEF32@48000 -c 1 assets/maple-leaf-rag.mp3 "$stage/track.wav"
+    python3 macos/Installer/wave_to_pcm.py "$stage/track.wav" "$audio/Resources/maple-leaf-rag.f32"
+    patch -s -o "$stage/Driver.c" "$stage/NullAudio.c" macos/Microphone/null-audio.patch
+    "$clang" -arch arm64 -arch x86_64 "-mmacosx-version-min=$minimum" -isysroot "$sdk" -O2 -fblocks \
+        -bundle -I macos/Microphone -framework CoreFoundation -framework CoreAudio \
+        "$stage/Driver.c" macos/Microphone/Soundtrack.c -o "$audio/MacOS/SilentMeetingPiano"
+fi
 
 for arch in "${architectures[@]}"; do
     target="$arch-apple-macos$minimum"
@@ -131,27 +147,55 @@ for arch in "${architectures[@]}"; do
     "$swift" -swift-version 5 -O -target "$target" -sdk "$sdk" \
         -module-cache-path "$build/swift-cache-$arch" -import-objc-header macos/App/NativeSpeech.h \
         -Xcc "-I$fvad/include" -Xcc "-I$whisper/include" -Xcc "-I$whisper/ggml/include" \
-        macos/Shared/*.swift macos/App/*.swift "${objects[@]}" \
+        macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SpeechPipeline}.swift \
+        "${ui[@]}" "${objects[@]}" \
         "$stage/whisper-build/src/libwhisper.a" "$stage"/whisper-build/ggml/src/libggml*.a \
         "$stage/whisper-build/ggml/src/ggml-blas/libggml-blas.a" -lc++ -framework Accelerate -o "$stage/app-$arch"
-    "$swift" -swift-version 5 -O -target "$target" -sdk "$sdk" \
-        -module-cache-path "$build/swift-cache-$arch" \
-        macos/Shared/*.swift macos/Camera/*.swift -o "$stage/camera-$arch"
+    if [[ "$mode" != --launcher ]]; then
+        "$swift" -swift-version 5 -O -target "$target" -sdk "$sdk" \
+            -module-cache-path "$build/swift-cache-$arch" \
+            macos/Shared/*.swift macos/Camera/*.swift -o "$stage/camera-$arch"
+    fi
 
     if [[ "$arch" == "$(uname -m)" && "${SILENT_RUN_TESTS:-0}" == 1 ]]; then
+        tests=(macos/Tests/Smoke.swift)
+        if [[ "$mode" == --launcher ]]; then
+            tests+=(-DSILENT_MEETING_LAUNCHER macos/Tests/LauncherSmoke.swift macos/App/CameraSink.swift
+                    macos/Launcher/{Setup,BlackHolePiano}.swift)
+        fi
         "$swift" -parse-as-library -swift-version 5 -O -target "$target" -sdk "$sdk" \
             -module-cache-path "$build/swift-cache-$arch" -import-objc-header macos/App/NativeSpeech.h \
             -Xcc "-I$fvad/include" -Xcc "-I$whisper/include" -Xcc "-I$whisper/ggml/include" \
-            macos/Shared/*.swift macos/App/{DialogueCards,FilmRenderer,SpeechPipeline}.swift macos/Tests/Smoke.swift \
+            macos/Shared/*.swift macos/App/{DialogueCards,FilmRenderer,SpeechPipeline}.swift "${tests[@]}" \
             "${objects[@]}" "$stage/whisper-build/src/libwhisper.a" "$stage"/whisper-build/ggml/src/libggml*.a \
             "$stage/whisper-build/ggml/src/ggml-blas/libggml-blas.a" -lc++ -framework Accelerate -o "$stage/smoke"
-        "$stage/smoke" "$app/Resources/ggml-tiny-q5_1.bin" "${SILENT_TEST_PCM:?Set SILENT_TEST_PCM to a short 16 kHz mono s16le speech fixture.}"
-        "$clang" -target "$target" -isysroot "$sdk" -framework CoreAudio -framework CoreFoundation \
-            macos/Tests/DriverSmoke.c -o "$stage/driver-smoke"
-        "$stage/driver-smoke" "$audio/MacOS/SilentMeetingPiano"
+        "$stage/smoke" "$app/Resources/ggml-tiny-q5_1.bin" \
+            "${SILENT_TEST_PCM:?Set SILENT_TEST_PCM to a short 16 kHz mono s16le speech fixture.}" \
+            "$repo/assets/maple-leaf-rag.mp3"
+        if [[ "$mode" != --launcher ]]; then
+            "$clang" -target "$target" -isysroot "$sdk" -framework CoreAudio -framework CoreFoundation \
+                macos/Tests/DriverSmoke.c -o "$stage/driver-smoke"
+            "$stage/driver-smoke" "$audio/MacOS/SilentMeetingPiano"
+        fi
     fi
 done
 lipo -create "$stage/app-arm64" "$stage/app-x86_64" -output "$app/MacOS/SilentMeeting"
+if [[ "$mode" == --launcher ]]; then
+    product="$build/Silent Meeting.app"
+    codesign --force --sign - "$app/.."
+    codesign --verify --strict "$app/.."
+    if [[ -e "$product" ]]; then
+        existing_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$product/Contents/Info.plist" 2>/dev/null || true)"
+        [[ "$existing_id" == "$bundle" ]] || { echo "An unrelated app already exists at $product" >&2; exit 1; }
+        mv "$product" "$stage/previous.app"
+    fi
+    if ! mv "$root/Applications/Silent Meeting.app" "$product"; then
+        if [[ -d "$stage/previous.app" ]]; then mv "$stage/previous.app" "$product"; fi
+        exit 1
+    fi
+    echo "$product"
+    exit 0
+fi
 lipo -create "$stage/camera-arm64" "$stage/camera-x86_64" -output "$camera/MacOS/$ext_id"
 
 if [[ "$mode" == --release ]]; then

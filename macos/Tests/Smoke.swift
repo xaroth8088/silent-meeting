@@ -44,6 +44,9 @@ struct Smoke {
         precondition((290..<430).contains { y in
             (300..<980).contains { pixelAt(x: $0, y: y, in: card).0 > 210 }
         })
+        #if SILENT_MEETING_LAUNCHER
+        try LauncherSmoke.check(frame: film, soundtrack: URL(fileURLWithPath: CommandLine.arguments[3]))
+        #endif
         print("Native speech, pause, card expiration, monochrome effect, and Core Media sample passed.")
     }
 

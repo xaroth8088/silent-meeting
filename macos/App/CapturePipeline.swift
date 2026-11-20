@@ -9,14 +9,15 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private let audio = AVCaptureAudioDataOutput()
     private let video = AVCaptureVideoDataOutput()
     private let renderer = FilmRenderer()
-    private let sink = CameraSink()
+    private let sink: CameraSink
     private var speech: SpeechPipeline?
     private var dialogue = DialogueCards()
     private var lastThumbnail = DispatchTime(uptimeNanoseconds: 0)
     private var active = false
     private let preview: (CGImage, Bool) -> Void
 
-    init(preview: @escaping (CGImage, Bool) -> Void) {
+    init(target: CameraSink.Target = .silentMeeting, preview: @escaping (CGImage, Bool) -> Void) {
+        self.sink = CameraSink(target: target)
         self.preview = preview
         super.init()
     }
@@ -89,10 +90,9 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         }
         guard active, let pixels = sampleBuffer.imageBuffer else { return }
         let now = DispatchTime.now()
-        guard let frame = renderer.render(pixels, title: dialogue.text(at: now)),
-              let sample = CameraFormat.sample(from: frame, at: CameraFormat.hostTime) else { return }
+        guard let frame = renderer.render(pixels, title: dialogue.text(at: now)) else { return }
 
-        let connected = sink.send(sample)
+        let connected = sink.send(frame)
         if now >= lastThumbnail + .milliseconds(125), let thumbnail = renderer.thumbnail(frame) {
             lastThumbnail = now
             preview(thumbnail, connected)

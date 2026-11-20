@@ -8,3 +8,5 @@
 - The release build requires a Developer ID provisioning profile for the host's `com.apple.developer.system-extension.install` entitlement. The camera's team-prefixed macOS App Group needs no provisioning profile by itself. [Apple Developer Technical Support](https://developer.apple.com/forums/thread/811067) · [App Group documentation](https://developer.apple.com/documentation/xcode/accessing-app-group-containers)
 
 Source [Apple Notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+The `--launcher` build packages a separate ad-hoc-signed app and omits the custom virtual devices. See [launcher setup](../Launcher/AGENTS.md).
