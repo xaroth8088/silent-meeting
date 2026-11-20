@@ -1,0 +1,365 @@
+--- a/NullAudio.c
++++ b/NullAudio.c
+@@ -21,4 +21,6 @@
+ #include <stdint.h>
+ #include <sys/syslog.h>
++#include <stdatomic.h>
++#include "Soundtrack.h"
+ 
+ //==================================================================================================
+@@ -129,5 +131,5 @@
+ //	so that each object's state can be tracked individually.
+ //	Note also that we share a single mutex across all objects to be thread safe for the same reason.
+-#define										kPlugIn_BundleID				"com.apple.audio.NullAudio"
++#define										kPlugIn_BundleID				"io.github.xaroth8088.silent-meeting.microphone"
+ static pthread_mutex_t						gPlugIn_StateMutex				= PTHREAD_MUTEX_INITIALIZER;
+ static UInt32								gPlugIn_RefCount				= 0;
+@@ -135,10 +137,10 @@
+ static const AudioObjectPropertySelector	kPlugIn_CustomPropertyID		= 'PCst';
+ 
+-#define										kBox_UID						"NullAudioBox_UID"
++#define										kBox_UID						"io.github.xaroth8088.silent-meeting.piano-box"
+ static CFStringRef							gBox_Name						= NULL;
+ static Boolean								gBox_Acquired					= true;
+ 
+-#define										kDevice_UID						"NullAudioDevice_UID"
+-#define										kDevice_ModelUID				"NullAudioDevice_ModelUID"
++#define										kDevice_UID						"io.github.xaroth8088.silent-meeting.piano-input"
++#define										kDevice_ModelUID				"io.github.xaroth8088.silent-meeting.piano-model"
+ static pthread_mutex_t						gDevice_IOMutex					= PTHREAD_MUTEX_INITIALIZER;
+ static Float64								gDevice_SampleRate				= 44100.0;
+@@ -155,8 +157,8 @@
+ static const Float32						kVolume_MinDB					= -96.0;
+ static const Float32						kVolume_MaxDB					= 6.0;
+-static Float32								gVolume_Input_Master_Value		= 0.0;
++static _Atomic Float32								gVolume_Input_Master_Value		= 1.0;
+ static Float32								gVolume_Output_Master_Value		= 0.0;
+ 
+-static bool									gMute_Input_Master_Value		= false;
++static _Atomic bool									gMute_Input_Master_Value		= false;
+ static bool									gMute_Output_Master_Value		= false;
+ 
+@@ -395,4 +397,9 @@
+ 	//	store the AudioServerPlugInHostRef
+ 	gPlugIn_Host = inHost;
++
++	if (!SilentMeetingLoadSoundtrack()) {
++		syslog(LOG_ERR, "Silent Meeting Piano: bundled soundtrack could not be opened");
++		return kAudioHardwareUnspecifiedError;
++	}
+ 	
+ 	//	initialize the box acquired property from the settings
+@@ -429,5 +436,5 @@
+ 	if(gBox_Name == NULL)
+ 	{
+-		gBox_Name = CFSTR("Null Box");
++		gBox_Name = CFSTR("Silent Meeting Piano");
+ 	}
+ 	
+@@ -1085,5 +1092,5 @@
+ 			//	This is the human readable name of the maker of the plug-in.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetPlugInPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the plug-in");
+-			*((CFStringRef*)outData) = CFSTR("Apple Inc.");
++			*((CFStringRef*)outData) = CFSTR("Silent Meeting");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -1553,5 +1560,5 @@
+ 			//	This is the human readable name of the maker of the box.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetBoxPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the box");
+-			*((CFStringRef*)outData) = CFSTR("Null Model");
++			*((CFStringRef*)outData) = CFSTR("Silent Meeting Piano");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -1560,5 +1567,5 @@
+ 			//	This is the human readable name of the maker of the box.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetBoxPropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the box");
+-			*((CFStringRef*)outData) = CFSTR("Apple Inc.");
++			*((CFStringRef*)outData) = CFSTR("Silent Meeting");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -1946,18 +1953,5 @@
+ 			
+ 		case kAudioObjectPropertyOwnedObjects:
+-			switch(inAddress->mScope)
+-			{
+-				case kAudioObjectPropertyScopeGlobal:
+-					*outDataSize = 8 * sizeof(AudioObjectID);
+-					break;
+-					
+-				case kAudioObjectPropertyScopeInput:
+-					*outDataSize = 4 * sizeof(AudioObjectID);
+-					break;
+-					
+-				case kAudioObjectPropertyScopeOutput:
+-					*outDataSize = 4 * sizeof(AudioObjectID);
+-					break;
+-			};
++			*outDataSize = inAddress->mScope == kAudioObjectPropertyScopeOutput ? 0 : 3 * sizeof(AudioObjectID);
+ 			break;
+ 
+@@ -2003,22 +1997,9 @@
+ 
+ 		case kAudioDevicePropertyStreams:
+-			switch(inAddress->mScope)
+-			{
+-				case kAudioObjectPropertyScopeGlobal:
+-					*outDataSize = 2 * sizeof(AudioObjectID);
+-					break;
+-					
+-				case kAudioObjectPropertyScopeInput:
+-					*outDataSize = 1 * sizeof(AudioObjectID);
+-					break;
+-					
+-				case kAudioObjectPropertyScopeOutput:
+-					*outDataSize = 1 * sizeof(AudioObjectID);
+-					break;
+-			};
++			*outDataSize = inAddress->mScope == kAudioObjectPropertyScopeOutput ? 0 : sizeof(AudioObjectID);
+ 			break;
+ 
+ 		case kAudioObjectPropertyControlList:
+-			*outDataSize = 7 * sizeof(AudioObjectID);
++			*outDataSize = inAddress->mScope == kAudioObjectPropertyScopeOutput ? 0 : 2 * sizeof(AudioObjectID);
+ 			break;
+ 
+@@ -2111,5 +2092,5 @@
+ 			//	This is the human readable name of the device.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetDevicePropertyData: not enough space for the return value of kAudioObjectPropertyName for the device");
+-			*((CFStringRef*)outData) = CFSTR("DeviceName");
++			*((CFStringRef*)outData) = CFSTR("Silent Meeting Piano");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -2118,5 +2099,5 @@
+ 			//	This is the human readable name of the maker of the plug-in.
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetDevicePropertyData: not enough space for the return value of kAudioObjectPropertyManufacturer for the device");
+-			*((CFStringRef*)outData) = CFSTR("ManufacturerName");
++			*((CFStringRef*)outData) = CFSTR("Silent Meeting");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -2148,59 +2129,15 @@
+ 			
+ 		case kAudioObjectPropertyOwnedObjects:
+-			//	Calculate the number of items that have been requested. Note that this
+-			//	number is allowed to be smaller than the actual size of the list. In such
+-			//	case, only that number of items will be returned
+-			theNumberItemsToFetch = inDataSize / sizeof(AudioObjectID);
+-			
+-			//	The device owns its streams and controls. Note that what is returned here
+-			//	depends on the scope requested.
+-			switch(inAddress->mScope)
+-			{
+-				case kAudioObjectPropertyScopeGlobal:
+-					//	global scope means return all objects
+-					if(theNumberItemsToFetch > 9)
+-					{
+-						theNumberItemsToFetch = 9;
+-					}
+-					
+-					//	fill out the list with as many objects as requested, which is everything
+-					for(theItemIndex = 0; theItemIndex < theNumberItemsToFetch; ++theItemIndex)
+-					{
+-						((AudioObjectID*)outData)[theItemIndex] = kObjectID_Stream_Input + theItemIndex;
+-					}
+-					break;
+-					
+-				case kAudioObjectPropertyScopeInput:
+-					//	input scope means just the objects on the input side
+-					if(theNumberItemsToFetch > 4)
+-					{
+-						theNumberItemsToFetch = 4;
+-					}
+-					
+-					//	fill out the list with the right objects
+-					for(theItemIndex = 0; theItemIndex < theNumberItemsToFetch; ++theItemIndex)
+-					{
+-						((AudioObjectID*)outData)[theItemIndex] = kObjectID_Stream_Input + theItemIndex;
+-					}
+-					break;
+-					
+-				case kAudioObjectPropertyScopeOutput:
+-					//	output scope means just the objects on the output side
+-					if(theNumberItemsToFetch > 4)
+-					{
+-						theNumberItemsToFetch = 4;
+-					}
+-					
+-					//	fill out the list with the right objects
+-					for(theItemIndex = 0; theItemIndex < theNumberItemsToFetch; ++theItemIndex)
+-					{
+-						((AudioObjectID*)outData)[theItemIndex] = kObjectID_Stream_Output + theItemIndex;
+-					}
+-					break;
+-			};
+-			
+-			//	report how much we wrote
+-			*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+-			break;
++		case kAudioObjectPropertyControlList:
++		{
++			const AudioObjectID input[] = { kObjectID_Stream_Input, kObjectID_Volume_Input_Master, kObjectID_Mute_Input_Master };
++			const bool controlsOnly = inAddress->mSelector == kAudioObjectPropertyControlList;
++			const UInt32 maximum = inAddress->mScope == kAudioObjectPropertyScopeOutput ? 0 : (controlsOnly ? 2 : 3);
++			const UInt32 requested = inDataSize / sizeof(AudioObjectID);
++			const UInt32 count = requested < maximum ? requested : maximum;
++			*outDataSize = count * sizeof(AudioObjectID);
++			memcpy(outData, input + controlsOnly, *outDataSize);
++			break;
++		}
+ 
+ 		case kAudioDevicePropertyDeviceUID:
+@@ -2293,20 +2230,12 @@
+ 
+ 		case kAudioDevicePropertyDeviceCanBeDefaultDevice:
+-			//	This property returns whether or not the device wants to be able to be the
+-			//	default device for content. This is the device that iTunes and QuickTime
+-			//	will use to play their content on and FaceTime will use as it's microhphone.
+-			//	Nearly all devices should allow for this.
+-			FailWithAction(inDataSize < sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetDevicePropertyData: not enough space for the return value of kAudioDevicePropertyDeviceCanBeDefaultDevice for the device");
+-			*((UInt32*)outData) = 1;
++			FailWithAction(inDataSize < sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "Silent Meeting Piano: short property buffer");
++			*((UInt32*)outData) = (inAddress->mScope == kAudioObjectPropertyScopeInput);
+ 			*outDataSize = sizeof(UInt32);
+ 			break;
+ 
+ 		case kAudioDevicePropertyDeviceCanBeDefaultSystemDevice:
+-			//	This property returns whether or not the device wants to be the system
+-			//	default device. This is the device that is used to play interface sounds and
+-			//	other incidental or UI-related sounds on. Most devices should allow this
+-			//	although devices with lots of latency may not want to.
+-			FailWithAction(inDataSize < sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetDevicePropertyData: not enough space for the return value of kAudioDevicePropertyDeviceCanBeDefaultSystemDevice for the device");
+-			*((UInt32*)outData) = 1;
++			FailWithAction(inDataSize < sizeof(UInt32), theAnswer = kAudioHardwareBadPropertySizeError, Done, "Silent Meeting Piano: short property buffer");
++			*((UInt32*)outData) = 0;
+ 			*outDataSize = sizeof(UInt32);
+ 			break;
+@@ -2321,88 +2250,9 @@
+ 
+ 		case kAudioDevicePropertyStreams:
+-			//	Calculate the number of items that have been requested. Note that this
+-			//	number is allowed to be smaller than the actual size of the list. In such
+-			//	case, only that number of items will be returned
+-			theNumberItemsToFetch = inDataSize / sizeof(AudioObjectID);
+-			
+-			//	Note that what is returned here depends on the scope requested.
+-			switch(inAddress->mScope)
+-			{
+-				case kAudioObjectPropertyScopeGlobal:
+-					//	global scope means return all streams
+-					if(theNumberItemsToFetch > 2)
+-					{
+-						theNumberItemsToFetch = 2;
+-					}
+-					
+-					//	fill out the list with as many objects as requested
+-					if(theNumberItemsToFetch > 0)
+-					{
+-						((AudioObjectID*)outData)[0] = kObjectID_Stream_Input;
+-					}
+-					if(theNumberItemsToFetch > 1)
+-					{
+-						((AudioObjectID*)outData)[1] = kObjectID_Stream_Output;
+-					}
+-					break;
+-					
+-				case kAudioObjectPropertyScopeInput:
+-					//	input scope means just the objects on the input side
+-					if(theNumberItemsToFetch > 1)
+-					{
+-						theNumberItemsToFetch = 1;
+-					}
+-					
+-					//	fill out the list with as many objects as requested
+-					if(theNumberItemsToFetch > 0)
+-					{
+-						((AudioObjectID*)outData)[0] = kObjectID_Stream_Input;
+-					}
+-					break;
+-					
+-				case kAudioObjectPropertyScopeOutput:
+-					//	output scope means just the objects on the output side
+-					if(theNumberItemsToFetch > 1)
+-					{
+-						theNumberItemsToFetch = 1;
+-					}
+-					
+-					//	fill out the list with as many objects as requested
+-					if(theNumberItemsToFetch > 0)
+-					{
+-						((AudioObjectID*)outData)[0] = kObjectID_Stream_Output;
+-					}
+-					break;
+-			};
+-			
+-			//	report how much we wrote
+-			*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+-			break;
+-
+-		case kAudioObjectPropertyControlList:
+-			//	Calculate the number of items that have been requested. Note that this
+-			//	number is allowed to be smaller than the actual size of the list. In such
+-			//	case, only that number of items will be returned
+-			theNumberItemsToFetch = inDataSize / sizeof(AudioObjectID);
+-			if(theNumberItemsToFetch > 7)
+-			{
+-				theNumberItemsToFetch = 7;
++			*outDataSize = 0;
++			if (inAddress->mScope != kAudioObjectPropertyScopeOutput && inDataSize >= sizeof(AudioObjectID)) {
++				*((AudioObjectID*)outData) = kObjectID_Stream_Input;
++				*outDataSize = sizeof(AudioObjectID);
+ 			}
+-			
+-			//	fill out the list with as many objects as requested, which is everything
+-			for(theItemIndex = 0; theItemIndex < theNumberItemsToFetch; ++theItemIndex)
+-			{
+-				if(theItemIndex < 3)
+-				{
+-					((AudioObjectID*)outData)[theItemIndex] = kObjectID_Volume_Input_Master + theItemIndex;
+-				}
+-				else
+-				{
+-					((AudioObjectID*)outData)[theItemIndex] = kObjectID_Volume_Output_Master + (theItemIndex - 3);
+-				}
+-			}
+-			
+-			//	report how much we wrote
+-			*outDataSize = theNumberItemsToFetch * sizeof(AudioObjectID);
+ 			break;
+ 
+@@ -2806,5 +2656,5 @@
+ 			//	This is the human readable name of the stream
+ 			FailWithAction(inDataSize < sizeof(CFStringRef), theAnswer = kAudioHardwareBadPropertySizeError, Done, "NullAudio_GetStreamPropertyData: not enough space for the return value of kAudioObjectPropertyName for the stream");
+-			*((CFStringRef*)outData) = (inObjectID == kObjectID_Stream_Input) ? CFSTR("InputStreamName") : CFSTR("OutputStreamName");
++			*((CFStringRef*)outData) = (inObjectID == kObjectID_Stream_Input) ? CFSTR("Piano") : CFSTR("OutputStreamName");
+ 			*outDataSize = sizeof(CFStringRef);
+ 			break;
+@@ -4137,8 +3987,4 @@
+ 			break;
+ 			
+-		case kAudioServerPlugInIOOperationWriteMix:
+-			willDo = true;
+-			willDoInPlace = true;
+-			break;
+ 			
+ 	};
+@@ -4181,5 +4027,5 @@
+ 	//	clear the buffer for the ReadInput operation.
+ 	
+-	#pragma unused(inClientID, inIOCycleInfo, ioSecondaryBuffer)
++	#pragma unused(inClientID, ioSecondaryBuffer)
+ 	
+ 	//	declare the local variables
+@@ -4189,5 +4035,5 @@
+ 	FailWithAction(inDriver != gAudioServerPlugInDriverRef, theAnswer = kAudioHardwareBadObjectError, Done, "NullAudio_DoIOOperation: bad driver reference");
+ 	FailWithAction(inDeviceObjectID != kObjectID_Device, theAnswer = kAudioHardwareBadObjectError, Done, "NullAudio_DoIOOperation: bad device ID");
+-	FailWithAction((inStreamObjectID != kObjectID_Stream_Input) && (inStreamObjectID != kObjectID_Stream_Output), theAnswer = kAudioHardwareBadObjectError, Done, "NullAudio_DoIOOperation: bad stream ID");
++	FailWithAction(inStreamObjectID != kObjectID_Stream_Input, theAnswer = kAudioHardwareBadObjectError, Done, "NullAudio_DoIOOperation: bad stream ID");
+ 
+ 	//	clear the buffer if this iskAudioServerPlugInIOOperationReadInput
+@@ -4195,5 +4041,6 @@
+ 	{
+ 		//	we are always dealing with a 2 channel 32 bit float buffer
+-		memset(ioMainBuffer, 0, inIOBufferFrameSize * 8);
++		SilentMeetingReadSoundtrack(ioMainBuffer, inIOBufferFrameSize, inIOCycleInfo->mInputTime.mSampleTime,
++								   gDevice_SampleRate, gVolume_Input_Master_Value, gMute_Input_Master_Value);
+ 	}
+ 
