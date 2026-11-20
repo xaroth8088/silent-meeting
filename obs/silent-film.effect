@@ -1,0 +1,82 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float clock_time;
+uniform float wear;
+uniform float card;
+uniform float aspect_ratio;
+
+sampler_state film_sampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertData {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+VertData VSFilm(VertData v)
+{
+    v.pos = mul(float4(v.pos.xyz, 1.0), ViewProj);
+    return v;
+}
+
+float hash(float2 p)
+{
+    return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float frame_line(float2 p, float2 extent, float thickness)
+{
+    float2 edge = abs(p) - extent;
+    return 1.0 - smoothstep(thickness, thickness + 0.0015, abs(max(edge.x, edge.y)));
+}
+
+float4 PSFilm(VertData v) : TARGET
+{
+    float2 uv = v.uv;
+    float2 center = uv - 0.5;
+    float frame = floor(clock_time * 18.0);
+    float grain = hash(floor(uv * float2(1120.0, 630.0)) + float2(frame, -frame)) - 0.5;
+
+    if (card > 0.5) {
+        float outer = frame_line(center, float2(0.443, 0.403), 0.0018);
+        float inner = frame_line(center, float2(0.427, 0.374), 0.0010);
+        float2 corner = abs(center) - float2(0.427, 0.374);
+        float lozenge = 1.0 - smoothstep(0.020, 0.023, abs(corner.x) * aspect_ratio + abs(corner.y));
+        float2 ornament = abs(center) - float2(0.0, 0.31);
+        float diamond = 1.0 - smoothstep(0.014, 0.017, abs(ornament.x) * aspect_ratio + abs(ornament.y));
+        float rule = (1.0 - smoothstep(0.001, 0.003, abs(ornament.y)))
+                     * (1.0 - smoothstep(0.10, 0.13, abs(ornament.x)));
+        float ink = saturate(0.034 + 0.031 * grain * wear - 0.05 * dot(center, center));
+        ink += 0.58 * outer + 0.24 * inner + 0.42 * lozenge + 0.53 * diamond + 0.30 * rule;
+        return float4(ink, ink, ink, 1.0);
+    }
+
+    float2 weave = float2(hash(float2(frame, 1.0)) - 0.5, hash(float2(frame, 2.0)) - 0.5);
+    float4 pixel = image.Sample(film_sampler, 0.5 + center * (1.0 - 0.017 * wear) + weave * 0.012 * wear);
+    float luminance = dot(pixel.rgb, float3(0.299, 0.587, 0.114));
+    luminance = saturate((luminance - 0.43) * 1.29 + 0.48);
+    float flicker = 1.0 + (hash(float2(frame, 3.0)) - 0.5) * 0.16 * wear;
+    float vignette = 1.0 - smoothstep(0.11, 0.62, dot(center, center)) * 0.77 * wear;
+    float scratch_seed = floor(frame / 5.0);
+    float scratch_x = hash(float2(scratch_seed, 5.0));
+    float scratch = (1.0 - smoothstep(0.00035, 0.0015, abs(uv.x - scratch_x)))
+                    * step(0.57, hash(float2(scratch_seed, 7.0)))
+                    * smoothstep(0.0, 0.28, uv.y) * (1.0 - smoothstep(0.8, 1.0, uv.y));
+    float2 dust_cell = floor(uv * float2(57.0, 32.0));
+    float dust = step(0.997, hash(dust_cell + float2(0.0, frame)))
+                 * (1.0 - smoothstep(0.025, 0.19, length(frac(uv * float2(57.0, 32.0)) - 0.5)));
+    float aged = saturate(luminance * flicker * vignette + wear * (grain * 0.19 + scratch * 0.25 - dust * 0.32));
+    return float4(aged, aged, aged, pixel.a);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSFilm(v);
+        pixel_shader = PSFilm(v);
+    }
+}
