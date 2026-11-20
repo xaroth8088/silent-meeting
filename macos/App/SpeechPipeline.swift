@@ -4,6 +4,9 @@ import Foundation
 final class VoiceEndpointer {
     static let rate = 16_000
     static let frameSize = 320
+    private static let onsetMask: UInt16 = 0b1_1111
+    private static let speechMask: UInt16 = 0x0fff
+    private static let pauseFrames = 30
 
     struct Chunk {
         let utterance: Int
@@ -14,10 +17,11 @@ final class VoiceEndpointer {
     private let vad: OpaquePointer
     private var pending: [Int16] = []
     private var preRoll: [[Int16]] = []
-    private var votes: [Bool] = []
+    private var voiceHistory: UInt16 = 0
     private var active: [Float] = []
     private var started = false
-    private var quiet = 0
+    private var framesSinceSpeech = 0
+    private var trailingQuiet = 0
     private var utterance = 0
 
     init?() {
@@ -33,9 +37,10 @@ final class VoiceEndpointer {
 
     func discard() {
         preRoll.removeAll(keepingCapacity: true)
-        votes.removeAll(keepingCapacity: true)
         active.removeAll(keepingCapacity: true)
-        quiet = 0
+        voiceHistory = 0
+        framesSinceSpeech = 0
+        trailingQuiet = 0
         started = false
     }
 
@@ -52,24 +57,28 @@ final class VoiceEndpointer {
     }
 
     private func process(_ frame: [Int16], voiced: Bool) -> Chunk? {
+        voiceHistory = ((voiceHistory << 1) | (voiced ? 1 : 0)) & Self.speechMask
         if !started {
             preRoll.append(frame)
             if preRoll.count > 8 { preRoll.removeFirst() }
-            votes.append(voiced)
-            if votes.count > 5 { votes.removeFirst() }
-            guard voiced, votes.filter({ $0 }).count >= 3 else { return nil }
+            guard voiced, (voiceHistory & Self.onsetMask).nonzeroBitCount >= 3 else { return nil }
             for saved in preRoll { active.append(contentsOf: saved.map { Float($0) / 32_768 }) }
             preRoll.removeAll(keepingCapacity: true)
-            votes.removeAll(keepingCapacity: true)
             started = true
             utterance += 1
             return nil
         }
 
         active.append(contentsOf: frame.map { Float($0) / 32_768 })
-        quiet = voiced ? 0 : quiet + 1
-        if quiet >= 38 {
-            let ending = active.dropLast(min(active.count, (quiet - 8) * Self.frameSize))
+        // Brief VAD positives, plus its own hangover, can occur during a real pause.
+        // Reset the deadline only with sustained voice in the last 240 ms.
+        let sustained = voiced && voiceHistory.nonzeroBitCount >= 10
+        framesSinceSpeech = sustained ? 0 : framesSinceSpeech + 1
+        trailingQuiet = voiced ? 0 : trailingQuiet + 1
+        if framesSinceSpeech >= Self.pauseFrames && trailingQuiet > 0 {
+            // Keep brief sounds in the audio in case a short word was spoken.
+            let trim = max(0, trailingQuiet - 8) * Self.frameSize
+            let ending = active.dropLast(min(active.count, trim))
             let chunk = Chunk(utterance: utterance, samples: Array(ending), final: true)
             discard()
             return chunk

@@ -16,6 +16,7 @@ struct Smoke {
         precondition(segments.count == 1 && segments[0].final, "Expected one utterance after a pause")
         let phrase = recognizer.transcribe(segments[0].samples)
         precondition(phrase.lowercased().contains("meeting") && phrase.lowercased().contains("session"), phrase)
+        checkNoisyPause(speech, recognizer: recognizer)
 
         let time = DispatchTime(uptimeNanoseconds: 1_000_000_000)
         var cards = DialogueCards()
@@ -63,6 +64,52 @@ struct Smoke {
         try LauncherSmoke.check(frame: film, soundtrack: URL(fileURLWithPath: CommandLine.arguments[3]))
         #endif
         print("Native speech, pause, card cleanup, centering, grain, expiration, preview cadence, monochrome effect, and Core Media sample passed.")
+    }
+
+    static func checkNoisyPause(_ speech: [Int16], recognizer: WhisperRecognizer) {
+        let frameSize = VoiceEndpointer.frameSize
+        let lastSound = speech.lastIndex { abs(Int($0)) > 150 }!
+        let speechEnd = (lastSound / frameSize + 1) * frameSize
+        var noisy = Array(speech.prefix(speechEnd))
+        noisy.append(contentsOf: repeatElement(0, count: 130 * frameSize))
+        var seed: UInt32 = 12
+        for delay in [14, 29, 44, 59, 74] {
+            var value = 0
+            let start = speechEnd + delay * frameSize
+            let length = 3 * frameSize
+            for index in 0..<length {
+                seed = seed &* 1_664_525 &+ 1_013_904_223
+                value = (value + Int((seed >> 16) % 6_001) - 3_000) / 2
+                noisy[start + index] = Int16(Double(value) * sin(.pi * Double(index) / Double(length)))
+            }
+        }
+
+        let endpointer = VoiceEndpointer()!
+        var result: VoiceEndpointer.Chunk?
+        var elapsed = 0
+        for offset in stride(from: 0, to: noisy.count - frameSize + 1, by: frameSize) {
+            endpointer.append(Array(noisy[offset..<offset + frameSize])) { result = $0 }
+            if result != nil {
+                elapsed = (offset + frameSize - speechEnd) * 1_000 / VoiceEndpointer.rate
+                break
+            }
+        }
+        precondition(result?.final == true && (0...800).contains(elapsed),
+                     "Brief noise delayed the utterance by \(elapsed) ms")
+        let start = DispatchTime.now().uptimeNanoseconds
+        let phrase = recognizer.transcribe(result!.samples).lowercased()
+        precondition(phrase.contains("meeting") && phrase.contains("session"), phrase)
+        let inference = (DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
+        print("Noisy pause finalized in \(elapsed) ms, with \(inference) ms of transcription.")
+
+        // Actual speech resuming during a short pause should stay in the same card.
+        let resumed = VoiceEndpointer()!
+        let spoken = Array(speech.prefix(speechEnd))
+        let continuous = spoken + Array(repeating: 0, count: 10 * frameSize) + speech
+        var chunks: [VoiceEndpointer.Chunk] = []
+        resumed.append(continuous) { chunks.append($0) }
+        precondition(chunks.count == 1 && chunks[0].final && chunks[0].samples.count > 2 * speechEnd,
+                     "Speech resuming after 200 ms should be included in the same utterance")
     }
 
     static func checkCardCenter(_ frame: CVPixelBuffer) {

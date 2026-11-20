@@ -26,3 +26,4 @@ Read the relevant implementation and upstream sources. Update the nearest page w
 - 2026-11-20 · Architecture · Added the Mac launcher with the existing signed OBS and BlackHole devices. See [Mac launcher](macos/Launcher/AGENTS.md).
 - 2026-11-20 · Verification · Fixed the first-preview timing bug and confirmed live frame delivery to a separate OBS Virtual Camera client. See [native verification](macos/Tests/AGENTS.md).
 - 2026-11-20 · Verification · Launcher 0.3.2 checks sound cue removal, horizontal centering of wrapped text, and animated grain on dialogue cards. See [native verification](macos/Tests/AGENTS.md).
+- 2026-11-20 · Verification · Launcher 0.3.3 reduced pause detection from 2.38 seconds to 720 milliseconds on the generated speech fixture with five short noise bursts. See [native verification](macos/Tests/AGENTS.md).
