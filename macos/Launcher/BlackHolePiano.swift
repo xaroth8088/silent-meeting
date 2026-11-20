@@ -2,6 +2,7 @@
 import AudioToolbox
 import CoreAudio
 import Foundation
+import os
 
 final class BlackHolePiano: @unchecked Sendable {
     static let uid = "BlackHole2ch_UID"
@@ -10,8 +11,8 @@ final class BlackHolePiano: @unchecked Sendable {
     private static let bytesPerFrame = UInt32(2 * MemoryLayout<Float>.size)
 
     private var queue: AudioQueueRef?
-    private var track: AVAudioPCMBuffer?
-    private var position = 0
+    private var mix: PianoMix?
+    private let desiredMood = OSAllocatedUnfairLock(initialState: SoundtrackMood.neutral)
 
     private static var deviceID: AudioDeviceID? {
         let uid = Self.uid as CFString
@@ -64,18 +65,12 @@ final class BlackHolePiano: @unchecked Sendable {
     }
 
     // Called only by the launcher lifecycle queue. There is deliberately no default-device route.
-    func start(track url: URL) throws {
+    func start(soundtracks directory: URL) throws {
         guard Self.deviceAvailable else { throw PianoError.unavailable }
         guard !Self.systemOutputUsesBlackHole else { throw PianoError.systemOutput }
-        let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
-        guard file.length > 0, file.length <= 12_000_000, file.processingFormat.channelCount == 1,
-              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))
-        else { throw PianoError.soundtrack }
-        try file.read(into: buffer)
-        guard buffer.frameLength > 0, buffer.floatChannelData != nil else { throw PianoError.soundtrack }
-
+        let mix = try PianoMix(soundtracks: directory)
         var format = AudioStreamBasicDescription(
-            mSampleRate: file.processingFormat.sampleRate, mFormatID: kAudioFormatLinearPCM,
+            mSampleRate: PianoMix.sampleRate, mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagsNativeFloatPacked, mBytesPerPacket: Self.bytesPerFrame,
             mFramesPerPacket: 1, mBytesPerFrame: Self.bytesPerFrame, mChannelsPerFrame: 2,
             mBitsPerChannel: 32, mReserved: 0
@@ -87,8 +82,7 @@ final class BlackHolePiano: @unchecked Sendable {
         }, Unmanaged.passUnretained(self).toOpaque(), nil, nil, 0, &created)
         guard status == noErr, let created else { throw PianoError.routing(status) }
         queue = created
-        track = buffer
-        position = 0
+        self.mix = mix
 
         do {
             let uid = Self.uid as CFString
@@ -110,12 +104,16 @@ final class BlackHolePiano: @unchecked Sendable {
         }
     }
 
+    func select(_ mood: SoundtrackMood) {
+        desiredMood.withLock { $0 = mood }
+    }
+
     func stop() {
         if let queue {
             AudioQueueDispose(queue, true)
             self.queue = nil
         }
-        track = nil
+        mix = nil
     }
 
     deinit { stop() }
@@ -125,23 +123,86 @@ final class BlackHolePiano: @unchecked Sendable {
     }
 
     private func enqueue(_ queue: AudioQueueRef, _ output: AudioQueueBufferRef) -> OSStatus {
-        guard let track, let samples = track.floatChannelData?[0] else { return kAudioQueueErr_CannotStart }
+        guard mix != nil else { return kAudioQueueErr_CannotStart }
+        let mood = desiredMood.withLockIfAvailable { $0 }
         let frames = Int(Self.framesPerBuffer)
         let stereo = output.pointee.mAudioData.assumingMemoryBound(to: Float.self)
-        Self.copyLoop(samples: samples, count: Int(track.frameLength), position: &position, into: stereo, frames: frames)
+        mix?.write(into: stereo, frames: frames, mood: mood)
         output.pointee.mAudioDataByteSize = Self.framesPerBuffer * Self.bytesPerFrame
         return AudioQueueEnqueueBuffer(queue, output, 0, nil)
     }
 
-    static func copyLoop(samples: UnsafePointer<Float>, count: Int, position: inout Int,
-                         into stereo: UnsafeMutablePointer<Float>, frames: Int) {
-        for index in 0..<frames {
-            let sample = samples[position]
+}
+
+struct PianoMix {
+    static let sampleRate = 48_000.0
+    static let fadeFrames = 5_760
+
+    private let tracks: [SoundtrackMood: AVAudioPCMBuffer]
+    private var current = SoundtrackMood.neutral
+    private var position = 0
+    private var fade: (mood: SoundtrackMood, position: Int, progress: Int)?
+
+    init(soundtracks directory: URL) throws {
+        var tracks: [SoundtrackMood: AVAudioPCMBuffer] = [:]
+        for mood in SoundtrackMood.allCases {
+            let url = directory.appendingPathComponent(mood.rawValue).appendingPathExtension("mp3")
+            let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
+            guard file.length > 0, file.length <= 12_000_000, file.processingFormat.channelCount == 1,
+                  file.processingFormat.sampleRate == Self.sampleRate,
+                  let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))
+            else { throw PianoError.soundtrack }
+            try file.read(into: buffer)
+            guard buffer.frameLength > 0, buffer.floatChannelData != nil else { throw PianoError.soundtrack }
+            tracks[mood] = buffer
+        }
+        self.tracks = tracks
+    }
+
+    // Called only by the Audio Queue producer after all tracks are resident in memory.
+    mutating func write(into stereo: UnsafeMutablePointer<Float>, frames: Int, mood: SoundtrackMood?) {
+        if let mood, mood != current, fade == nil { fade = (mood, 0, 0) }
+        let source = tracks[current]!
+        let samples = source.floatChannelData![0]
+        let count = Int(source.frameLength)
+        var offset = 0
+        if var fade {
+            let destination = tracks[fade.mood]!
+            let next = destination.floatChannelData![0]
+            let nextCount = Int(destination.frameLength)
+            let overlap = min(frames, Self.fadeFrames - fade.progress)
+            for index in 0..<overlap {
+                let blend = Float(fade.progress + index + 1) / Float(Self.fadeFrames)
+                let sample = Self.read(samples, count: count, position: &position) * (1 - blend)
+                           + Self.read(next, count: nextCount, position: &fade.position) * blend
+                stereo[index * 2] = sample
+                stereo[index * 2 + 1] = sample
+            }
+            offset = overlap
+            fade.progress += overlap
+            if fade.progress < Self.fadeFrames {
+                self.fade = fade
+                return
+            }
+            current = fade.mood
+            position = fade.position
+            self.fade = nil
+        }
+
+        let track = tracks[current]!
+        let loop = track.floatChannelData![0]
+        for index in offset..<frames {
+            let sample = Self.read(loop, count: Int(track.frameLength), position: &position)
             stereo[index * 2] = sample
             stereo[index * 2 + 1] = sample
-            position += 1
-            if position == count { position = 0 }
         }
+    }
+
+    private static func read(_ samples: UnsafePointer<Float>, count: Int, position: inout Int) -> Float {
+        let sample = samples[position]
+        position += 1
+        if position == count { position = 0 }
+        return sample
     }
 }
 

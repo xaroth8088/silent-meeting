@@ -1,6 +1,11 @@
 import Foundation
 
 struct DialogueCards {
+    struct Page {
+        let text: String
+        let cue: SoundtrackCue?
+    }
+
     private static let soundMarker: String = {
         let gap = #"[\s_-]+"#
         let cue = [
@@ -14,33 +19,38 @@ struct DialogueCards {
         return "\\[\\s*(?:\(cue))\\s*\\]|\\(\\s*(?:\(cue))\\s*\\)"
     }()
 
-    private var pages: [String] = []
-    private var current: String?
+    private var pages: [Page] = []
+    private var current: Page?
     private var until = DispatchTime(uptimeNanoseconds: 0)
 
-    mutating func enqueue(_ text: String) {
+    static func prepare(_ text: String, sentiment: SoundtrackSentiment? = nil) -> Page? {
         let stripped = text.replacingOccurrences(of: Self.soundMarker, with: " ",
                                                  options: [.regularExpression, .caseInsensitive])
         let dialogue: String
         if stripped == text {
             dialogue = text
         } else {
-            guard stripped.contains(where: { $0.isLetter || $0.isNumber }) else { return }
+            guard stripped.contains(where: { $0.isLetter || $0.isNumber }) else { return nil }
             dialogue = stripped.replacingOccurrences(of: #"\s+([,.;:!?])"#, with: "$1",
                                                      options: .regularExpression)
         }
+        let clean = dialogue.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !clean.isEmpty else { return nil }
+        return Page(text: clean, cue: sentiment?.prepare(clean))
+    }
+
+    mutating func enqueue(_ transcript: Page) {
         var page = ""
-        for word in dialogue.split(whereSeparator: \.isWhitespace) {
+        for word in transcript.text.split(separator: " ") {
             if !page.isEmpty && page.count + word.count + 1 > 130 {
-                pages.append(page)
+                pages.append(Page(text: page, cue: transcript.cue))
                 page = ""
             }
             if word.count > 130 {
-                if !page.isEmpty { pages.append(page); page = "" }
                 var start = word.startIndex
                 while start < word.endIndex {
                     let end = word.index(start, offsetBy: 130, limitedBy: word.endIndex) ?? word.endIndex
-                    pages.append(String(word[start..<end]))
+                    pages.append(Page(text: String(word[start..<end]), cue: transcript.cue))
                     start = end
                 }
             } else {
@@ -48,15 +58,15 @@ struct DialogueCards {
                 page += word
             }
         }
-        if !page.isEmpty { pages.append(page) }
+        if !page.isEmpty { pages.append(Page(text: page, cue: transcript.cue)) }
         if pages.count > 8 { pages.removeFirst(pages.count - 8) }
     }
 
-    mutating func text(at now: DispatchTime) -> String? {
+    mutating func page(at now: DispatchTime) -> Page? {
         if now >= until {
             current = pages.isEmpty ? nil : pages.removeFirst()
             if let current {
-                let ms = min(7_000, max(2_500, current.count * 59))
+                let ms = min(7_000, max(2_500, current.text.count * 59))
                 until = now + .milliseconds(ms)
             }
         }

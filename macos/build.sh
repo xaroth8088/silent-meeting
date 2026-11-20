@@ -108,7 +108,7 @@ mkdir -p "$app/MacOS" "$app/Resources/Licenses"
 metadata_args=("$root" "$team" "$bundle")
 if [[ "$mode" == --launcher ]]; then
     metadata_args+=(--launcher)
-    cp assets/maple-leaf-rag.mp3 "$app/Resources/"
+    cp assets/{maple-leaf-rag,the-entertainer,gymnopedie-no-1}.mp3 "$app/Resources/"
 else
     mkdir -p "$camera/MacOS" "$audio/MacOS" "$audio/Resources"
     if [[ "$mode" == --unsigned ]]; then metadata_args+=(--unsigned); fi
@@ -147,7 +147,7 @@ for arch in "${architectures[@]}"; do
     "$swift" -swift-version 5 -O -target "$target" -sdk "$sdk" \
         -module-cache-path "$build/swift-cache-$arch" -import-objc-header macos/App/NativeSpeech.h \
         -Xcc "-I$fvad/include" -Xcc "-I$whisper/include" -Xcc "-I$whisper/ggml/include" \
-        macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SpeechPipeline}.swift \
+        macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SoundtrackSentiment,SpeechPipeline}.swift \
         "${ui[@]}" "${objects[@]}" \
         "$stage/whisper-build/src/libwhisper.a" "$stage"/whisper-build/ggml/src/libggml*.a \
         "$stage/whisper-build/ggml/src/ggml-blas/libggml-blas.a" -lc++ -framework Accelerate -o "$stage/app-$arch"
@@ -166,12 +166,12 @@ for arch in "${architectures[@]}"; do
         "$swift" -parse-as-library -swift-version 5 -O -target "$target" -sdk "$sdk" \
             -module-cache-path "$build/swift-cache-$arch" -import-objc-header macos/App/NativeSpeech.h \
             -Xcc "-I$fvad/include" -Xcc "-I$whisper/include" -Xcc "-I$whisper/ggml/include" \
-            macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SpeechPipeline}.swift "${tests[@]}" \
+            macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SoundtrackSentiment,SpeechPipeline}.swift "${tests[@]}" \
             "${objects[@]}" "$stage/whisper-build/src/libwhisper.a" "$stage"/whisper-build/ggml/src/libggml*.a \
             "$stage/whisper-build/ggml/src/ggml-blas/libggml-blas.a" -lc++ -framework Accelerate -o "$stage/smoke"
         "$stage/smoke" "$app/Resources/ggml-tiny-q5_1.bin" \
             "${SILENT_TEST_PCM:?Set SILENT_TEST_PCM to a short 16 kHz mono s16le speech fixture.}" \
-            "$repo/assets/maple-leaf-rag.mp3"
+            "$app/Resources"
         if [[ "$mode" != --launcher ]]; then
             "$clang" -target "$target" -isysroot "$sdk" -framework CoreAudio -framework CoreFoundation \
                 macos/Tests/DriverSmoke.c -o "$stage/driver-smoke"

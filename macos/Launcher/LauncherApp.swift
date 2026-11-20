@@ -272,7 +272,7 @@ final class MeetingLauncher: ObservableObject, @unchecked Sendable {
         guard canStart, !starting, !running,
               let camera = cameras.first(where: { $0.uniqueID == cameraID }),
               let microphone = microphones.first(where: { $0.uniqueID == microphoneID }),
-              let track = Bundle.main.url(forResource: "maple-leaf-rag", withExtension: "mp3")
+              let soundtracks = Bundle.main.resourceURL
         else { return }
 
         autoStartTried = true
@@ -295,7 +295,9 @@ final class MeetingLauncher: ObservableObject, @unchecked Sendable {
             let mic = BlackHolePiano()
             sessionID = id
             waitingSince = .now()
-            let pipeline = CapturePipeline(target: .obs) { [weak self] image, sending in
+            let pipeline = CapturePipeline(target: .obs, changeMusic: { [weak mic] mood in
+                mic?.select(mood)
+            }) { [weak self] image, sending in
                 DispatchQueue.main.async {
                     guard let self, self.sessionID == id else { return }
                     self.preview = image
@@ -317,7 +319,7 @@ final class MeetingLauncher: ObservableObject, @unchecked Sendable {
             worker.async {
                 let result = Result {
                     try pipeline.start(camera: camera, microphone: microphone)
-                    do { try mic.start(track: track) } catch {
+                    do { try mic.start(soundtracks: soundtracks) } catch {
                         pipeline.stop()
                         throw error
                     }

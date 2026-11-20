@@ -20,17 +20,19 @@ struct Smoke {
 
         let time = DispatchTime(uptimeNanoseconds: 1_000_000_000)
         var cards = DialogueCards()
-        cards.enqueue("[inhales] [BLANK_AUDIO].")
-        precondition(cards.text(at: time) == nil)
-        cards.enqueue("[BLANK_AUDIO] Good morning [inhales], everyone. (laughter) [Team Alpha] (the second option).")
-        precondition(cards.text(at: time) == "Good morning, everyone. [Team Alpha] (the second option).")
+        precondition(DialogueCards.prepare("[inhales] [BLANK_AUDIO].") == nil)
+        precondition(cards.page(at: time) == nil)
+        cards.enqueue(DialogueCards.prepare(
+            "[BLANK_AUDIO] Good morning [inhales], everyone. (laughter) [Team Alpha] (the second option)."
+        )!)
+        precondition(cards.page(at: time)?.text == "Good morning, everyone. [Team Alpha] (the second option).")
 
         cards = DialogueCards()
-        cards.enqueue(phrase)
-        precondition(cards.text(at: time) == phrase)
-        precondition(cards.text(at: time + .seconds(3)) == nil)
-        cards.enqueue(phrase)
-        precondition(cards.text(at: time + .seconds(4)) == phrase)
+        cards.enqueue(DialogueCards.prepare(phrase)!)
+        precondition(cards.page(at: time)?.text == phrase)
+        precondition(cards.page(at: time + .seconds(3)) == nil)
+        cards.enqueue(DialogueCards.prepare(phrase)!)
+        precondition(cards.page(at: time + .seconds(4))?.text == phrase)
 
         var preview = PreviewThrottle()
         let firstFrame = DispatchTime.now()
@@ -61,7 +63,7 @@ struct Smoke {
         let nextGrain = (280..<328).map { pixelAt(x: $0, y: 250, in: nextCard).0 }
         precondition(Set(grain).count > 1 && grain != nextGrain, "The card grain should animate")
         #if SILENT_MEETING_LAUNCHER
-        try LauncherSmoke.check(frame: film, soundtrack: URL(fileURLWithPath: CommandLine.arguments[3]))
+        try LauncherSmoke.check(frame: film, soundtracks: URL(fileURLWithPath: CommandLine.arguments[3]))
         #endif
         print("Native speech, pause, card cleanup, centering, grain, expiration, preview cadence, monochrome effect, and Core Media sample passed.")
     }

@@ -13,7 +13,7 @@ On 2026-11-20, the app, camera extension, and HAL driver compiled for arm64 and 
 
 ## OBS and BlackHole launcher
 
-- Build with `macos/build.sh --launcher` and the same speech test environment. `LauncherSmoke.swift` verifies frame adaptation to the OBS BGRA format, looping mono-to-stereo PCM for BlackHole, the missing-device guard, and download checksum checking.
+- Build with `macos/build.sh --launcher` and the same speech test environment. `LauncherSmoke.swift` verifies frame adaptation to the OBS BGRA format, sentiment thresholds and the real Apple scorer, sample-by-sample stereo crossfading between all three bundled loops, the missing-device guard, and download checksum checking.
 - Use a Mac with the official OBS and BlackHole builds to complete first-run setup, then quit OBS. Start the launcher and select **OBS Virtual Camera** and **BlackHole 2ch** in a second app. Confirm the video changes from film to a dialogue card after a phrase and that the mic contains only piano. Verify that stopping the launcher clears both outputs and reopening it restores the connection. An output device containing BlackHole should block playback until normal speakers or headphones are selected.
 
 On 2026-11-20, Apple Silicon launcher smoke tests passed with generated speech and a synthetic video frame. Verified the OBS disk image checksum and app signature, and the BlackHole package checksum and notarization. Actual virtual-device activation and call audio still require the first-run approvals and a live client check.

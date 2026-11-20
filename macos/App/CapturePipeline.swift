@@ -12,12 +12,18 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private let sink: CameraSink
     private var speech: SpeechPipeline?
     private var dialogue = DialogueCards()
+    private var displayedCue: SoundtrackCue?
     private var previewThrottle = PreviewThrottle()
     private var active = false
     private let preview: (CGImage, Bool) -> Void
+    private let sentiment: SoundtrackSentiment?
+    private let changeMusic: ((SoundtrackMood) -> Void)?
 
-    init(target: CameraSink.Target = .silentMeeting, preview: @escaping (CGImage, Bool) -> Void) {
+    init(target: CameraSink.Target = .silentMeeting, changeMusic: ((SoundtrackMood) -> Void)? = nil,
+         preview: @escaping (CGImage, Bool) -> Void) {
         self.sink = CameraSink(target: target)
+        self.changeMusic = changeMusic
+        self.sentiment = changeMusic == nil ? nil : SoundtrackSentiment()
         self.preview = preview
         super.init()
     }
@@ -26,8 +32,8 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     func start(camera: AVCaptureDevice, microphone: AVCaptureDevice) throws {
         guard let model = Bundle.main.url(forResource: "ggml-tiny-q5_1", withExtension: "bin"),
               let speech = SpeechPipeline(model: model, publish: { [weak self] text in
-                  guard let self else { return }
-                  self.videoQueue.async { if self.active { self.dialogue.enqueue(text) } }
+                  guard let self, let transcript = DialogueCards.prepare(text, sentiment: self.sentiment) else { return }
+                  self.videoQueue.async { if self.active { self.dialogue.enqueue(transcript) } }
               })
         else { throw CaptureError.model }
         self.speech = speech
@@ -78,6 +84,7 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
             active = false
             sink.stop()
             dialogue = DialogueCards()
+            displayedCue = nil
         }
         audioQueue.sync { speech = nil }
     }
@@ -90,9 +97,16 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         }
         guard active, let pixels = sampleBuffer.imageBuffer else { return }
         let now = DispatchTime.now()
-        guard let frame = renderer.render(pixels, title: dialogue.text(at: now)) else { return }
+        let page = dialogue.page(at: now)
+        guard let frame = renderer.render(pixels, title: page?.text) else { return }
 
         let connected = sink.send(frame)
+        if let cue = page?.cue, cue !== displayedCue {
+            displayedCue = cue
+            if let mood = cue.mood.withLockIfAvailable({ $0 }) ?? nil {
+                changeMusic?(mood)
+            }
+        }
         if previewThrottle.allowsFrame(at: now), let thumbnail = renderer.thumbnail(frame) {
             preview(thumbnail, connected)
         }
