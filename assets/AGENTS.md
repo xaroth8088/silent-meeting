@@ -8,4 +8,4 @@ The bundled `maple-leaf-rag.mp3` uses Scott Joplin's *Maple Leaf Rag* (1899), fr
 - [Library of Congress background on the piano rolls](https://www.loc.gov/static/programs/national-recording-preservation-board/documents/RagtimeScottJoplin.pdf)
 - [FFmpeg audio filters](https://ffmpeg.org/ffmpeg-filters.html)
 
-To rebuild with FFmpeg and libmp3lame on PATH, run `python3 assets/prepare_soundtrack.py --output /path/to/new.mp3` from the repo root. The script verifies the source SHA-256. The default output is the bundled path and FFmpeg refuses to overwrite it. OBS's Media Source loops the finished MP3. Keep the credited upstream version and hash in sync if the input changes.
+To rebuild with curl and FFmpeg (with libmp3lame) on PATH, run `python3 assets/prepare_soundtrack.py --output /path/to/new.mp3` from the repo root. Use `--source /path/to/original.ogg` for an existing download. The script verifies the source SHA-256. The default output is the bundled path and FFmpeg refuses to overwrite it. OBS's Media Source loops the finished MP3. Keep the credited upstream version and hash in sync if the input changes.

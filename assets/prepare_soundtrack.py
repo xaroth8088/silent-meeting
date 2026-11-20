@@ -6,7 +6,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-from urllib.request import Request, urlopen
 
 SOURCE = (
     "https://upload.wikimedia.org/wikipedia/commons/d/db/"
@@ -37,10 +36,16 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as folder:
         source = args.source
         if source is None:
+            curl = shutil.which("curl")
+            if not curl:
+                parser.error("Install curl or pass the original recording with --source.")
             source = Path(folder) / "piano-roll.ogg"
-            request = Request(SOURCE, headers={"User-Agent": "SilentMeeting/1.0 (soundtrack builder)"})
-            with urlopen(request, timeout=30) as response:
-                source.write_bytes(response.read(8 * 1024 * 1024))
+            subprocess.run(
+                [curl, "-fsSL", "--max-time", "30", "--max-filesize", "8388608",
+                 "--user-agent", "SilentMeeting/1.0 (soundtrack builder)",
+                 "-o", str(source), SOURCE],
+                check=True,
+            )
         if hashlib.sha256(source.read_bytes()).hexdigest() != SHA256:
             parser.error("The source recording does not match the documented SHA-256.")
 
