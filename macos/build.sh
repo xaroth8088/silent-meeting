@@ -160,13 +160,13 @@ for arch in "${architectures[@]}"; do
     if [[ "$arch" == "$(uname -m)" && "${SILENT_RUN_TESTS:-0}" == 1 ]]; then
         tests=(macos/Tests/Smoke.swift)
         if [[ "$mode" == --launcher ]]; then
-            tests+=(-DSILENT_MEETING_LAUNCHER macos/Tests/LauncherSmoke.swift macos/App/CameraSink.swift
+            tests+=(-DSILENT_MEETING_LAUNCHER macos/Tests/LauncherSmoke.swift
                     macos/Launcher/{Setup,BlackHolePiano}.swift)
         fi
         "$swift" -parse-as-library -swift-version 5 -O -target "$target" -sdk "$sdk" \
             -module-cache-path "$build/swift-cache-$arch" -import-objc-header macos/App/NativeSpeech.h \
             -Xcc "-I$fvad/include" -Xcc "-I$whisper/include" -Xcc "-I$whisper/ggml/include" \
-            macos/Shared/*.swift macos/App/{DialogueCards,FilmRenderer,SpeechPipeline}.swift "${tests[@]}" \
+            macos/Shared/*.swift macos/App/{CameraSink,CapturePipeline,DialogueCards,FilmRenderer,SpeechPipeline}.swift "${tests[@]}" \
             "${objects[@]}" "$stage/whisper-build/src/libwhisper.a" "$stage"/whisper-build/ggml/src/libggml*.a \
             "$stage/whisper-build/ggml/src/ggml-blas/libggml-blas.a" -lc++ -framework Accelerate -o "$stage/smoke"
         "$stage/smoke" "$app/Resources/ggml-tiny-q5_1.bin" \

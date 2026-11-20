@@ -24,3 +24,4 @@ Read the relevant implementation and upstream sources. Update the nearest page w
 - 2026-11-20 · Architecture · Added the standalone Mac app, Core Media I/O camera extension, and Core Audio piano microphone. Retained OBS as a separate fallback. See the [Mac wiki](macos/AGENTS.md).
 - 2026-11-20 · Signing · Confirmed that the host requires a Developer ID provisioning profile to install the camera extension. See [Mac packaging](macos/Installer/AGENTS.md).
 - 2026-11-20 · Architecture · Added the Mac launcher with the existing signed OBS and BlackHole devices. See [Mac launcher](macos/Launcher/AGENTS.md).
+- 2026-11-20 · Verification · Fixed the first-preview timing bug and confirmed live frame delivery to a separate OBS Virtual Camera client. See [native verification](macos/Tests/AGENTS.md).

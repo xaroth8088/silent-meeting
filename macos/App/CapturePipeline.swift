@@ -12,7 +12,7 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private let sink: CameraSink
     private var speech: SpeechPipeline?
     private var dialogue = DialogueCards()
-    private var lastThumbnail = DispatchTime(uptimeNanoseconds: 0)
+    private var previewThrottle = PreviewThrottle()
     private var active = false
     private let preview: (CGImage, Bool) -> Void
 
@@ -93,10 +93,19 @@ final class CapturePipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         guard let frame = renderer.render(pixels, title: dialogue.text(at: now)) else { return }
 
         let connected = sink.send(frame)
-        if now >= lastThumbnail + .milliseconds(125), let thumbnail = renderer.thumbnail(frame) {
-            lastThumbnail = now
+        if previewThrottle.allowsFrame(at: now), let thumbnail = renderer.thumbnail(frame) {
             preview(thumbnail, connected)
         }
+    }
+}
+
+struct PreviewThrottle {
+    private var nextFrame: DispatchTime?
+
+    mutating func allowsFrame(at now: DispatchTime) -> Bool {
+        if let nextFrame, now < nextFrame { return false }
+        nextFrame = now + .milliseconds(125)
+        return true
     }
 }
 

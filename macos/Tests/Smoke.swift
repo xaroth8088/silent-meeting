@@ -25,6 +25,12 @@ struct Smoke {
         cards.enqueue(phrase)
         precondition(cards.text(at: time + .seconds(4)) == phrase)
 
+        var preview = PreviewThrottle()
+        let firstFrame = DispatchTime.now()
+        precondition(preview.allowsFrame(at: firstFrame))
+        precondition(!preview.allowsFrame(at: firstFrame + .milliseconds(124)))
+        precondition(preview.allowsFrame(at: firstFrame + .milliseconds(125)))
+
         let source = CameraFormat.allocate(from: CameraFormat.makePool())!
         CVPixelBufferLockBaseAddress(source, [])
         let stride = CVPixelBufferGetBytesPerRow(source) / 4
@@ -47,7 +53,7 @@ struct Smoke {
         #if SILENT_MEETING_LAUNCHER
         try LauncherSmoke.check(frame: film, soundtrack: URL(fileURLWithPath: CommandLine.arguments[3]))
         #endif
-        print("Native speech, pause, card expiration, monochrome effect, and Core Media sample passed.")
+        print("Native speech, pause, card expiration, preview cadence, monochrome effect, and Core Media sample passed.")
     }
 
     static func pixelAt(x: Int, y: Int, in frame: CVPixelBuffer) -> (UInt8, UInt8, UInt8) {

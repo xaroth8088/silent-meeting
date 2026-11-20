@@ -83,9 +83,7 @@ struct LauncherView: View {
                 }
             }
 
-            Text(meeting.message ?? (meeting.ready
-                ? "In your meeting app, select OBS Virtual Camera and BlackHole 2ch."
-                : "Complete setup to make both devices available in your meeting app."))
+            Text(meeting.message ?? meeting.setupHint)
             .fixedSize(horizontal: false, vertical: true)
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -176,6 +174,11 @@ final class MeetingLauncher: ObservableObject, @unchecked Sendable {
 
     var ready: Bool { obsInstalled && cameraReady && audioReady && !outputConflict && !obsRunning }
     var canStart: Bool { ready && preparing == nil && !cameraID.isEmpty && !microphoneID.isEmpty }
+    var setupHint: String {
+        if obsRunning && cameraReady { return "Quit OBS Studio to free its virtual camera for Silent Meeting." }
+        if ready { return "In your meeting app, select OBS Virtual Camera and BlackHole 2ch." }
+        return "Complete setup to make both devices available in your meeting app."
+    }
 
     func refresh() {
         obsInstalled = LauncherSetup.obsInstalled
@@ -213,7 +216,7 @@ final class MeetingLauncher: ObservableObject, @unchecked Sendable {
             if !microphones.contains(where: { $0.uniqueID == microphoneID }) { microphoneID = microphones.first?.uniqueID ?? "" }
         }
 
-        if running && DispatchTime.now() >= lastPreview + .seconds(4) {
+        if running && !starting && DispatchTime.now() >= lastPreview + .seconds(4) {
             live = false
             message = "Waiting for frames from your camera."
         }

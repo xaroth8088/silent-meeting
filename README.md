@@ -11,6 +11,8 @@ Open **Silent Meeting.app** on macOS 14 or later. The launcher uses the official
 3. Choose your physical camera and speech microphone in Silent Meeting, click **Start**, and grant camera and microphone access. **Start on launch** reuses those choices on later launches. Use **Stop** or close the app to end capture.
 4. In your meeting app, choose **OBS Virtual Camera** for video and **BlackHole 2ch** for the microphone. Leave the meeting's speaker output and macOS sound output on your headphones or speakers. Keep BlackHole dedicated to Silent Meeting during the call.
 
+The processed preview appears in Silent Meeting. If the launcher asks you to quit OBS Studio, use **Quit OBS** in the launcher, then click **Start**. OBS Studio can take over its virtual output if it is open.
+
 The piano is the only audio Silent Meeting writes to BlackHole. Physical microphone audio stays in memory for offline transcription. The launcher leaves the Mac's default audio devices alone.
 
 ### Build the app from source
