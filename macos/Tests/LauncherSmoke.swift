@@ -40,18 +40,20 @@ enum LauncherSmoke {
     }
 
     private static func checkSoundtrack(_ directory: URL) throws {
-        precondition(SoundtrackMood(score: 0.8) == .upbeat && SoundtrackMood(score: -0.9) == .somber)
+        precondition(SoundtrackMood(score: 0.8) == .upbeat && SoundtrackMood(score: -0.9) == .dramatic)
         precondition(SoundtrackMood(score: 0.79) == .neutral && SoundtrackMood(score: -0.8) == .neutral)
         precondition(SoundtrackMood(score: .nan) == nil)
 
         let score = SoundtrackSentiment()
         let cue = DialogueCards.prepare("[inhales] That's amazing news!", sentiment: score)!
+        let negative = DialogueCards.prepare("This is an absolute disaster!", sentiment: score)!
         precondition(cue.text == "That's amazing news!")
         let deadline = DispatchTime.now() + .seconds(2)
-        while cue.cue?.mood.withLock({ $0 }) == nil && DispatchTime.now() < deadline {
+        while negative.cue?.mood.withLock({ $0 }) == nil && DispatchTime.now() < deadline {
             Thread.sleep(forTimeInterval: 0.01)
         }
         precondition(cue.cue?.mood.withLock({ $0 }) == .upbeat)
+        precondition(negative.cue?.mood.withLock({ $0 }) == .dramatic)
 
         let pending = SoundtrackCue()
         var cards = DialogueCards()
@@ -66,7 +68,7 @@ enum LauncherSmoke {
         var mix = try PianoMix(soundtracks: directory)
         var previous = SoundtrackMood.neutral
         var previousPosition = 0
-        for mood in [SoundtrackMood.upbeat, .somber, .neutral] {
+        for mood in [SoundtrackMood.upbeat, .dramatic, .neutral] {
             let incoming = try prefix(mood, frames: count, directory: directory)
             let outgoing = try prefix(previous, frames: previousPosition + count, directory: directory)
             for offset in stride(from: 0, to: count, by: frames) {

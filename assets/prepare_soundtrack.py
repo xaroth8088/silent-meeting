@@ -19,6 +19,7 @@ class Track:
     artist: str
     gain: float = 0.72
     seconds: int | None = None
+    tempo: float = 1
 
 
 TRACKS = {
@@ -32,15 +33,16 @@ TRACKS = {
         "d666009b399f632b22da8783afd1545d1372fce2b0d782c5f4b8e882c875f146",
         "The Entertainer", "Scott Joplin", gain=0.41, seconds=48,
     ),
-    "gymnopedie-no-1": Track(
-        "b/b7/Gymnopedie_No._1..ogg",
-        "13e4e03797169392166b9f11d9bf9c421c022b48ad87d9b10bd441ce068502da",
-        "Gymnopédie No. 1", "Erik Satie", gain=0.82, seconds=48,
+    "burglar-music": Track(
+        "transcoded/0/02/Mysterious_-_Burglar_Music_%281913%29_1_Zamecnik.mid/"
+        "Mysterious_-_Burglar_Music_%281913%29_1_Zamecnik.mid.ogg",
+        "fabf53304e9b3729a3d79e8d5c2655d920e0df1239789ef71ba206457c684efe",
+        "Mysterioso - Burglar Music No. 1", "J. S. Zamecnik", gain=9.6, seconds=53, tempo=1.44,
     ),
 }
 
 FILTERS = (
-    "[0:a]aformat=sample_rates=48000:channel_layouts=mono,"
+    "[0:a]aformat=sample_rates=48000:channel_layouts=mono,{tempo}"
     "highpass=f=135,lowpass=f=4250,equalizer=f=1650:t=q:w=1:g=1.8,"
     "vibrato=f=1.3:d=0.07,volume={gain}{excerpt}[piano];"
     "[1:a]bandpass=f=1850:t=o:w=2.5[hiss];"
@@ -79,6 +81,7 @@ def main() -> None:
             parser.error("The source recording does not match the documented SHA-256.")
 
         excerpt = ""
+        tempo = f"atempo={track.tempo}," if track.tempo != 1 else ""
         if track.seconds is not None:
             excerpt = (f",atrim=duration={track.seconds},afade=t=in:d=0.012,"
                        f"afade=t=out:st={track.seconds - 0.25}:d=0.25")
@@ -89,7 +92,7 @@ def main() -> None:
                 "-f", "lavfi", "-i", "anoisesrc=r=48000:a=0.029:seed=74",
                 "-f", "lavfi", "-i",
                 "aevalsrc=if(lt(random(0)\\,0.0012)\\,0.69*(2*random(1)-1)\\,0):s=48000",
-                "-filter_complex", FILTERS.format(gain=track.gain, excerpt=excerpt),
+                "-filter_complex", FILTERS.format(tempo=tempo, gain=track.gain, excerpt=excerpt),
                 "-map", "[mix]", "-map_metadata", "-1",
                 "-codec:a", "libmp3lame", "-b:a", "48k",
                 "-metadata", f"title={track.title} (Silent Meeting mix)",

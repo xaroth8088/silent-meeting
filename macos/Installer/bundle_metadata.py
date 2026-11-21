@@ -47,7 +47,7 @@ def main() -> None:
     }
     if args.launcher:
         info(app / "Info.plist", args.bundle, "SilentMeeting", "APPL", "Silent Meeting",
-             version="0.4.0", build="7", **capture_permissions)
+             version="0.4.1", build="8", **capture_permissions)
         return
     ext_id = args.bundle + ".camera"
     extension = app / f"Library/SystemExtensions/{ext_id}.systemextension/Contents"

@@ -4,14 +4,14 @@ import os
 enum SoundtrackMood: String, CaseIterable, Sendable {
     case neutral = "maple-leaf-rag"
     case upbeat = "the-entertainer"
-    case somber = "gymnopedie-no-1"
+    case dramatic = "burglar-music"
 
     init?(score: Double) {
         guard (-1.0...1.0).contains(score) else { return nil }
         if score >= 0.8 {
             self = .upbeat
         } else if score <= -0.9 {
-            self = .somber
+            self = .dramatic
         } else {
             self = .neutral
         }

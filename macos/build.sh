@@ -108,7 +108,7 @@ mkdir -p "$app/MacOS" "$app/Resources/Licenses"
 metadata_args=("$root" "$team" "$bundle")
 if [[ "$mode" == --launcher ]]; then
     metadata_args+=(--launcher)
-    cp assets/{maple-leaf-rag,the-entertainer,gymnopedie-no-1}.mp3 "$app/Resources/"
+    cp assets/{maple-leaf-rag,the-entertainer,burglar-music}.mp3 "$app/Resources/"
 else
     mkdir -p "$camera/MacOS" "$audio/MacOS" "$audio/Resources"
     if [[ "$mode" == --unsigned ]]; then metadata_args+=(--unsigned); fi

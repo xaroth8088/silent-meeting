@@ -15,7 +15,7 @@ The processed preview appears in Silent Meeting. If the launcher asks you to qui
 
 The piano is the only audio Silent Meeting writes to BlackHole. Physical microphone audio stays in memory for offline transcription. The launcher leaves the Mac's default audio devices alone.
 
-When a dialogue card appears, the launcher uses Apple's on-device sentiment score to cue the piano. A score of **+0.8 or higher** plays *The Entertainer*. A score of **−0.9 or lower** plays *Gymnopédie No. 1*. The middle range plays *Maple Leaf Rag*, also the track at startup. If a score is unavailable when a card appears, the current track continues. [Soundtrack credits](assets/AGENTS.md)
+When a dialogue card appears, the launcher uses Apple's on-device sentiment score to cue the piano. A score of **+0.8 or higher** plays *The Entertainer*. A score of **−0.9 or lower** plays a sped-up *Mysterioso—Burglar Music No. 1*, a 1913 silent-film cue. The middle range plays *Maple Leaf Rag*, also the track at startup. If a score is unavailable when a card appears, the current track continues. [Soundtrack credits](assets/AGENTS.md)
 
 ### Build the app from source
 
